@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# ccnet — manage an ai-dev-sandbox devcontainer and its network airlock.
+#
+# CORE FILE. Runs on the HOST, deliberately. The container has no Docker socket,
+# so nothing running inside it can invoke this or change the airlock mode. That
+# separation is the whole guarantee: the thing inside the box cannot open the box.
+#
+# Everything here resolves the container by the devcontainer.local_folder LABEL,
+# never by container or compose-project name. Those names are derived from the
+# workspace folder (e.g. myproject_devcontainer-app-1) and differ in every
+# project — hardcoding them is the most common way these commands silently
+# target the wrong thing, or nothing at all.
+#
+#   ccnet up      [folder]   start the devcontainer (builds on first run)
+#   ccnet rebuild [folder]   recreate it after editing .devcontainer/*
+#   ccnet shell   [folder]   open a shell inside, as the sandbox user
+#   ccnet status  [folder]   show airlock mode and verify it is enforced
+#   ccnet open    [folder]   open the allowlist
+#   ccnet close   [folder]   close to Anthropic only
+#   ccnet down    [folder]   stop the stack (volumes are kept)
+#
+# `folder` defaults to the current directory.
+set -euo pipefail
+
+action="${1:-status}"
+folder="${2:-$PWD}"
+folder="$(cd "$folder" 2>/dev/null && pwd || echo "$folder")"
+user="${CCNET_USER:-dev}"
+
+usage() {
+  sed -n '/^#   ccnet up/,/^# `folder` defaults/p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-2}"
+}
+
+case "$action" in
+  up|rebuild|shell|status|open|close|down) ;;
+  -h|--help|help) usage 0 ;;
+  *) echo "ccnet: unknown action '$action'" >&2; usage ;;
+esac
+
+# --- Docker reachability, with a fallback for a shell that predates the user's
+#     'docker' group membership (avoids forcing a logout mid-setup).
+if ! docker info >/dev/null 2>&1; then
+  if [ "${CCNET_SG_RETRY:-0}" != "1" ] \
+     && getent group docker | grep -qw "$(id -un)" \
+     && command -v sg >/dev/null 2>&1; then
+    export CCNET_SG_RETRY=1
+    exec sg docker -c "$(printf '%q ' "$0" "$@")"
+  fi
+  echo "ccnet: cannot reach the Docker daemon." >&2
+  if getent group docker | grep -qw "$(id -un)"; then
+    echo "       You are in the 'docker' group but this shell predates it —" >&2
+    echo "       log out and back in to make it permanent." >&2
+  else
+    echo "       Add yourself: sudo usermod -aG docker $(id -un)" >&2
+  fi
+  exit 1
+fi
+
+find_container() {
+  docker ps -qf "label=devcontainer.local_folder=$folder" | head -1
+}
+
+require_container() {
+  local cid others
+  cid=$(find_container)
+  if [ -z "$cid" ]; then
+    echo "ccnet: no running devcontainer for $folder" >&2
+    echo "       Start it with: ccnet up" >&2
+    others=$(docker ps --format '{{.Label "devcontainer.local_folder"}}' | grep -v '^$' || true)
+    [ -n "$others" ] && { echo "       Running elsewhere:" >&2; echo "$others" | sed 's/^/         /' >&2; }
+    exit 1
+  fi
+  echo "$cid"
+}
+
+# Compose project name: read it off the running container, which is
+# authoritative. Fall back to the devcontainer CLI's derivation only when
+# stopped. Guessing this wrong makes `down` silently tear down nothing.
+compose_project() {
+  local cid
+  cid=$(find_container)
+  if [ -n "$cid" ]; then
+    docker inspect "$cid" --format '{{index .Config.Labels "com.docker.compose.project"}}'
+  else
+    # Compose project names must be lowercase [a-z0-9_-]. A directory called
+    # MyProject or my.project would otherwise produce an invalid name and
+    # `down` would error, or silently tear down nothing.
+    basename "$folder" \
+      | tr '[:upper:]' '[:lower:]' \
+      | tr -c 'a-z0-9_-' '-' \
+      | sed 's/-*$//' \
+      | awk '{print $0 "_devcontainer"}'
+  fi
+}
+
+case "$action" in
+  up|rebuild)
+    command -v devcontainer >/dev/null 2>&1 || {
+      echo "ccnet: devcontainer CLI not found. Install: npm i -g @devcontainers/cli" >&2
+      exit 1
+    }
+    if [ "$action" = "rebuild" ]; then
+      devcontainer up --remove-existing-container --workspace-folder "$folder"
+    else
+      devcontainer up --workspace-folder "$folder"
+    fi
+    ;;
+
+  shell)
+    cid=$(require_container)
+    exec docker exec -it -u "$user" -w /workspace "$cid" zsh
+    ;;
+
+  status)
+    cid=$(require_container)
+    mode=$(docker exec "$cid" cat /etc/claude-net-mode 2>/dev/null || echo "unknown")
+    name=$(docker ps --format '{{.Names}}' -f "id=$cid")
+
+    # Verify the rules are ACTUALLY in force. The mode file is a statement of
+    # intent — if the container started in a way that skipped the firewall it
+    # would still read "closed" while nothing was enforced. Trust the kernel,
+    # not the file. A status command that cannot detect its own control being
+    # absent is worse than no status command.
+    if docker exec -u root "$cid" iptables -S OUTPUT 2>/dev/null | grep -q -- '-j REJECT'; then
+      printf '%s  %s  (enforced)\n' "$mode" "$name"
+      [ "$mode" = "closed" ] || \
+        echo "WARNING: network is OPEN — do not leave an unattended run in this state." >&2
+    else
+      printf '%s  %s\n' "$mode" "$name"
+      echo "DANGER: the mode file says '$mode' but NO firewall rules are in force." >&2
+      echo "        The container is fully connected. Re-apply with:" >&2
+      echo "          docker exec -u root $name /usr/local/bin/init-firewall.sh" >&2
+      exit 1
+    fi
+    ;;
+
+  open|close)
+    cid=$(require_container)
+    docker exec -u root "$cid" "/usr/local/bin/net-${action}.sh"
+    ;;
+
+  down)
+    project=$(compose_project)
+    compose_file="$folder/.devcontainer/docker-compose.yml"
+    [ -f "$compose_file" ] || { echo "ccnet: no $compose_file" >&2; exit 1; }
+    echo "Stopping project '$project' (volumes kept)"
+    docker compose -f "$compose_file" -p "$project" down
+    ;;
+esac

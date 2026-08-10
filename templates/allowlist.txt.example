@@ -1,0 +1,42 @@
+# ai-dev-sandbox — network allowlist.
+#
+# Baked into the image, root-owned, and NOT writable from inside the container.
+# Changing it requires `ccnet rebuild`, which only the host can trigger — that
+# is deliberate, so a sandboxed process cannot widen its own boundary.
+#
+# api.anthropic.com is always permitted and must not be listed here; without it
+# Claude cannot run at all.
+#
+# Two kinds of entry:
+#
+#   example.com      a domain. Reachable only while the airlock is OPEN.
+#   tcp:host:port    an internal service. Reachable in BOTH modes, because an
+#                    app must still reach its database while closed. Must
+#                    resolve to a private address; a public one is refused.
+
+# --- domains, reachable when OPEN -------------------------------------------
+
+# Source control
+github.com
+api.github.com
+codeload.github.com
+objects.githubusercontent.com
+
+# PHP / Composer
+packagist.org
+repo.packagist.org
+
+# Node / npm / yarn
+registry.npmjs.org
+registry.yarnpkg.com
+
+# Other registries — uncomment as needed
+# pypi.org
+# files.pythonhosted.org
+# proxy.golang.org
+# sum.golang.org
+# crates.io
+# static.crates.io
+
+# --- internal services, reachable in BOTH modes -----------------------------
+tcp:db:3306

@@ -1,0 +1,33 @@
+# ai-dev-sandbox — shell config for the sandbox user.
+#
+# CORE FILE, but convention rather than security. Safe to replace per project if
+# you prefer a different shell setup; only the prompt indicator has a safety
+# argument, and losing it costs you a visual cue, not a control.
+
+# History, persisted to the command-history volume. HISTFILE alone is not
+# enough — without SAVEHIST zsh writes nothing and the volume stays empty.
+HISTFILE=/commandhistory/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt SHARE_HISTORY APPEND_HISTORY INC_APPEND_HISTORY HIST_IGNORE_DUPS
+
+autoload -Uz compinit && compinit -d "$HOME/.zcompdump"
+autoload -Uz colors && colors
+
+# Airlock state in the prompt. PROMPT_SUBST re-evaluates on every prompt, so
+# this tracks ccnet open/close live rather than showing the value from when the
+# shell started. The whole design depends on not accidentally leaving the
+# network open, so it should be impossible to lose track of.
+setopt PROMPT_SUBST
+_net_mode() {
+  local m
+  m=$(cat /etc/claude-net-mode 2>/dev/null || echo '?')
+  if [ "$m" = "closed" ]; then
+    print -n "%F{green}[closed]%f"
+  else
+    print -n "%F{red}[OPEN]%f"
+  fi
+}
+PROMPT='$(_net_mode) %F{cyan}%~%f %# '
+
+alias ll='ls -alF'

@@ -1,0 +1,58 @@
+# ai-dev-sandbox — per-project stack settings.
+#
+# Changing anything here requires `ccnet rebuild`, because these values are
+# compiled into the image. For the domain allowlist see allowlist.txt, which is
+# also baked in and also needs a rebuild.
+#
+# Keys left unset fall back to the preset defaults.
+
+PRESET=php-mysql
+
+# --- versions ---------------------------------------------------------------
+PHP_VERSION=8.4
+NODE_VERSION=20
+MYSQL_VERSION=8.4
+
+TZ=UTC
+
+# --- web --------------------------------------------------------------------
+HTTP_PORT=8080          # host port; pick something that will not collide with
+                        # another local stack (DDEV's router takes 80/443)
+DOCROOT=public          # web root, relative to the project
+
+# --- database ---------------------------------------------------------------
+# Development credentials only. This database is reachable solely from the
+# sandbox network and is never exposed on a host port.
+DB_NAME=db
+DB_PASSWORD=root
+
+# --- generated directories --------------------------------------------------
+# Paths kept OFF the bind mount, one per line, relative to the project root.
+#
+# This single list generates BOTH the Dockerfile `mkdir` list and the compose
+# volume list. Keeping them in one place is deliberate: when they disagree,
+# Docker creates the volume owned by root and your package manager fails later
+# with a confusing permission error that needs `docker volume rm` to clear.
+#
+# List anything generated rather than authored: dependency trees, build output,
+# framework caches, uploaded assets.
+SANDBOX_VOLUMES="
+vendor
+node_modules
+public/assets
+"
+
+# --- extra environment ------------------------------------------------------
+# Added verbatim to the app service. Framework config, and any opt-outs for
+# packages whose postinstall downloads binaries from hosts you have not
+# allowlisted — those would otherwise make `install` exit non-zero.
+#
+# Values are copied into the compose file verbatim, so write them as YAML.
+# Do NOT backslash-escape the quotes: this file is parsed, not sourced, so a
+# \" would survive into docker-compose.yml and break the YAML parse.
+#
+# EXTRA_ENV="
+# APP_ENV: dev
+# CYPRESS_INSTALL_BINARY: '0'
+# PUPPETEER_SKIP_DOWNLOAD: '1'
+# "
