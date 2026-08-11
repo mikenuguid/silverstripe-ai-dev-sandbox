@@ -16,9 +16,10 @@ presets/<name>/
 └── docker-compose.yml.tmpl# rendered to <project>/.devcontainer/docker-compose.yml
 ```
 
-`templates/devcontainer.json.tmpl` is shared by all presets, as are the four files in
+`templates/devcontainer.json.tmpl` is shared by all presets, as are the six files in
 `core/`. `core/` is copied **verbatim** and must never be templated — it carries the security
-guarantee and has to be byte-identical in every install.
+guarantee and has to be byte-identical in every install. Three of the six are advisory rather
+than load-bearing: `zshrc`, `airlock-warn.sh` and `net-guard.sh`.
 
 ## The placeholder contract
 
@@ -79,14 +80,22 @@ both in step: the fallback is the last resort, `defaults.conf` is the documented
    a plain `docker compose up` would otherwise leave the container with no firewall while the
    mode file still said `closed`. This regression shipped once and was invisible —
    `ccnet status` reported `closed` while everything was reachable.
-5. Background the long-running service and add a healthcheck, so a service crash surfaces as
+5. Copy the hooks block too — `airlock-warn.sh`, `net-guard.sh` and the
+   `managed-settings.json` they are registered in. Advisory rather than load-bearing, so a
+   preset without them is still safe, but they are the only things that tell an agent *inside*
+   the container that the airlock is open, and the only thing that refuses its network tools
+   when it is open and unattended. They must go in
+   `/etc/claude-code/managed-settings.json`, not `/home/dev/.claude`: that directory is a
+   named volume, seeded from the image only at creation, so a rebuild could never update a
+   file placed there.
+6. Background the long-running service and add a healthcheck, so a service crash surfaces as
    `unhealthy` rather than taking the whole sandbox down or going unnoticed.
-6. Declare every internal service in `templates/allowlist.txt.example` as `tcp:<name>:<port>`,
+7. Declare every internal service in `templates/allowlist.txt.example` as `tcp:<name>:<port>`,
    or the app will not reach it while closed.
-7. `cap_add` is `NET_ADMIN` and `NET_RAW` **only**. Never `SYS_ADMIN` — it would permit
+8. `cap_add` is `NET_ADMIN` and `NET_RAW` **only**. Never `SYS_ADMIN` — it would permit
    remounting filesystems. Never mount the Docker socket.
-8. Run the full verification below.
-9. Document the provisioned versions in the requirements table in `README.md`.
+9. Run the full verification below.
+10. Document the provisioned versions in the requirements table in `README.md`.
 
 ## Verification
 
@@ -136,6 +145,22 @@ confirm `ccnet status` reports `DANGER` and exits non-zero.
 
 **Idempotency**: re-run `install.sh` and confirm `sandbox.conf` and `allowlist.txt` are
 preserved while the generated files are refreshed.
+
+**The session-start warning**: as the sandbox user, `/usr/local/bin/airlock-warn.sh` must
+print nothing while closed, and valid JSON containing `additionalContext` after `ccnet open`.
+Pipe it through `python3 -m json.tool` — `SessionStart` stdout is only read as JSON, so a
+malformed line is discarded in silence rather than erroring. Confirm the file itself is
+root-owned and unwritable, along with `/etc/claude-code/managed-settings.json`.
+
+**The network guard**: as the sandbox user, feed `/usr/local/bin/net-guard.sh` a payload on
+stdin and check each combination. Only open-plus-unattended may deny:
+
+```bash
+p() { printf '{"permission_mode":"%s","tool_name":"WebFetch"}' "$1" | /usr/local/bin/net-guard.sh; }
+p default            # while OPEN: no output (allowed)
+p bypassPermissions  # while OPEN: JSON with permissionDecision "deny"
+p bypassPermissions  # while CLOSED: no output (the firewall already refuses)
+```
 
 **Fail-closed**: point a domain in `allowlist.txt` at something unresolvable, `ccnet open`,
 and confirm the firewall forces the mode back to `closed` rather than leaving the mode file

@@ -23,6 +23,8 @@ core/                   # copied verbatim into every project — NEVER templated
   init-firewall.sh      #   the firewall and airlock logic
   net-open.sh           #   root-only, not in sudoers
   net-close.sh          #   root-only, not in sudoers
+  airlock-warn.sh       #   SessionStart hook; advisory, not security
+  net-guard.sh          #   PreToolUse hook; tripwire, not the boundary
   zshrc                 #   convention, not security
 presets/php-mysql/      # one stack: templates + defaults
 templates/              # devcontainer.json + the two config examples
@@ -68,45 +70,29 @@ rather than working around it.
 ## Tell the user when the airlock is open
 
 `ccnet open` is meant to last seconds. Forgetting `ccnet close` is the most likely way this
-sandbox gets used wrong — the container stays reachable, and nothing about the prompt or the
-tooling says so unless someone looks.
+sandbox gets used wrong — the container stays reachable, and nothing says so unless someone
+looks.
 
-**Check once at the start of a session that involves the sandbox, and say so plainly if it is
-open.** Which check depends on where you are running:
+Installed projects handle this themselves: `core/airlock-warn.sh` is a `SessionStart` hook,
+wired in via `/etc/claude-code/managed-settings.json`, that puts the warning in front of an
+agent working *inside* a sandbox. See `docs/how-it-works.md` for why it lives in managed
+settings and why its output must be JSON.
 
-| You are | Check | Open looks like |
-|---|---|---|
-| Inside a sandbox container | `cat /etc/claude-net-mode` | `open` |
-| On the host | `ccnet status <project>` | `open ... (enforced)` |
+**This section is about sessions working on this repository, on the host** — where no hook
+applies. If such a session starts or exercises a sandbox, check `ccnet status <project>` and
+say plainly if it reads `open`. That command is the authority: it verifies the live iptables
+chain rather than the mode file, so it also catches the inverse and worse case, mode `closed`
+with nothing enforced, which it reports as `DANGER`.
 
-`ccnet status` already prints its own warning and is the authority — it verifies the live
-iptables chain. `/etc/claude-net-mode` is only a statement of intent, so from inside, confirm
-it with a functional probe against a domain that is allowlisted but not permitted while
-closed:
-
-```bash
-curl --connect-timeout 5 -s -o /dev/null https://github.com && echo "REACHABLE — airlock open"
-```
-
-Do not use `api.anthropic.com` for this — it is reachable in both modes, so it tells you
-nothing. And note the reverse case: mode `closed` with traffic still flowing means the
-firewall never applied, which is worse than an open airlock and is what `ccnet status`
-reports as `DANGER`.
-
-What to say, and what not to do:
+Then:
 
 - Warn, then continue the task. This is information the user needs, not a blocker.
-- Say it once. Re-checking or repeating it every turn is noise; mention it again only if the
-  state changes or the user is about to start an unattended run.
-- **Never close it yourself.** From inside you cannot — `net-close.sh` is deliberately not in
-  sudoers, and that is the guarantee working. From the host, do not run `ccnet close` unasked:
-  it would break an install the user may be halfway through. Tell them the command.
-- Flag it specifically before anything unattended, and when handling content the user did not
-  write. An open network is the exposure window that makes prompt injection worth attempting.
-
-A prompt instruction is advisory — it depends on the model remembering. Users who want this
-enforced should use a `SessionStart` hook that runs the check and fails loudly; suggest that
-if they ask for something reliable.
+- Say it once. Repeating it every turn is noise; raise it again only if the state changes or
+  the user is about to start an unattended run.
+- **Never close it unasked.** `ccnet close` mid-task would break an install they may be
+  halfway through. Tell them the command instead.
+- Do not weaken the warning to make a test pass. If `airlock-warn.sh` fires during your own
+  testing, that is it working.
 
 ## Conventions
 

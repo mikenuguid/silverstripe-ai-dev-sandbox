@@ -96,6 +96,44 @@ RUN chown root:root /usr/local/bin/init-firewall.sh /usr/local/bin/net-open.sh /
     && echo "$USERNAME ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/$USERNAME-firewall \
     && chmod 0440 /etc/sudoers.d/$USERNAME-firewall
 
+# Airlock hooks for an agent running inside the container:
+#   SessionStart -> airlock-warn.sh   warns when the airlock is open, and detects
+#                                     the worse case of no firewall at all
+#   PreToolUse   -> net-guard.sh      refuses WebFetch/WebSearch when the airlock
+#                                     is open AND the session is unattended
+#
+# Advisory, not part of the guarantee. They go in MANAGED settings, not the
+# project and not /home/dev/.claude: that directory is a named volume, seeded
+# from the image only at creation, so a rebuild could never update a file placed
+# there. Managed settings are also the highest-precedence scope and root-owned,
+# so the sandboxed process cannot override or delete these.
+#
+# Only `hooks` is set. Deliberately NOT allowManagedHooksOnly — that would block
+# the project's own hooks, which is not this file's business.
+#
+# The PreToolUse matcher is WebFetch|WebSearch only. Bash is deliberately absent:
+# see the header of net-guard.sh.
+COPY airlock-warn.sh net-guard.sh /usr/local/bin/
+RUN chown root:root /usr/local/bin/airlock-warn.sh /usr/local/bin/net-guard.sh \
+    && chmod 0755 /usr/local/bin/airlock-warn.sh /usr/local/bin/net-guard.sh \
+    && mkdir -p /etc/claude-code \
+    && printf '%s\n' \
+       '{' \
+       '  "hooks": {' \
+       '    "SessionStart": [' \
+       '      { "hooks": [ { "type": "command", "command": "/usr/local/bin/airlock-warn.sh" } ] }' \
+       '    ],' \
+       '    "PreToolUse": [' \
+       '      {' \
+       '        "matcher": "WebFetch|WebSearch",' \
+       '        "hooks": [ { "type": "command", "command": "/usr/local/bin/net-guard.sh" } ]' \
+       '      }' \
+       '    ]' \
+       '  }' \
+       '}' > /etc/claude-code/managed-settings.json \
+    && chown root:root /etc/claude-code/managed-settings.json \
+    && chmod 0644 /etc/claude-code/managed-settings.json
+
 # The allowlist is BAKED IN, not bind-mounted.
 #
 # A read-only bind of .devcontainer/allowlist.txt would give no protection: the

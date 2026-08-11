@@ -37,6 +37,61 @@ So the only privileged action available re-applies whatever mode is already set.
 idempotent by construction — not a gate that might be bypassed, but an operation with
 nothing to bypass. `net-open.sh` and `net-close.sh` are deliberately **not** in sudoers.
 
+## Telling the agent inside that the airlock is open
+
+`ccnet open` is meant to last seconds, and forgetting `ccnet close` is the most likely way
+this sandbox gets used wrong. Two mechanisms surface it, aimed at different readers.
+
+**For a human**: `core/zshrc` draws the mode into the shell prompt, re-reading
+`/etc/claude-net-mode` on every prompt (`PROMPT_SUBST`), so an open airlock shows as a red
+`[OPEN]`. An agent never sees this — the Bash tool captures a command's stdout, not your
+prompt.
+
+**For an agent**: `core/airlock-warn.sh` runs as a `SessionStart` hook and injects a warning
+into the agent's context when the airlock is open. Three details make it work:
+
+- It is wired in through `/etc/claude-code/managed-settings.json`, **not** the project and not
+  `/home/dev/.claude`. The project must stay untouched — everything ships inside
+  `.devcontainer/` — and `/home/dev/.claude` is a named *volume*, seeded from the image only at
+  creation, so a file placed there could never be updated by a later rebuild. Managed settings
+  are also the highest-precedence scope, and both files are root-owned, so the sandboxed
+  process can neither override nor delete the warning.
+- `SessionStart` **stdout is not shown to the model**. It has to be JSON carrying
+  `hookSpecificOutput.additionalContext`; a bare `echo` is parsed as nothing and discarded in
+  silence. That is why this is a script rather than a one-liner in the settings file.
+- It also probes `example.com`, which is never allowlisted in either mode. Reachable means no
+  firewall applied at all — the same condition `ccnet status` reports as `DANGER`, and worse
+  than an open airlock, because the mode file then claims a protection that does not exist.
+  The probe is cheap in the normal case: the firewall `REJECT`s rather than drops, so it
+  returns immediately instead of waiting out the timeout.
+
+It says nothing when the airlock is closed and enforced. A reassurance every session is noise,
+and noise is what gets warnings ignored.
+
+**When nobody is reading**: a warning is useless in an unattended run, so `core/net-guard.sh`
+runs as a `PreToolUse` hook on `WebFetch|WebSearch` and *refuses* rather than warns. It denies
+exactly one combination — the airlock is `open` **and** the session's `permission_mode` is
+`bypassPermissions`, `dontAsk` or `auto`:
+
+| Airlock | Session | Result |
+|---|---|---|
+| closed | any | allowed — the firewall already refuses these connections |
+| open | `default`, `plan`, `acceptEdits` | allowed — `default` already prompts for `WebFetch`; a second gate is friction with no gain |
+| open | `auto`, `dontAsk`, `bypassPermissions` | **denied** |
+| open | undeterminable | **denied** — fails closed, like `init-firewall.sh` |
+
+`deny` rather than `ask`, deliberately: deny is documented to block, whereas whether `ask` is
+auto-approved under `--dangerously-skip-permissions` is not something this should rest on.
+
+Both hooks are advisory, not load-bearing. Removing them weakens no invariant.
+
+**And `net-guard.sh` is a tripwire, not a boundary.** It covers the agent's declared network
+tools and nothing else. Outbound traffic from `Bash` — `composer install`, `git fetch`, a test
+suite calling an API — is not matched, and must not be: those are precisely what an open
+airlock is *for*, and matching command strings for `curl` is trivially evaded. The iptables
+airlock remains the control; this only closes the case where an agent reaches out through its
+own tools while no one is watching.
+
 ## Credentials
 
 There are two sets, and only one stays outside.

@@ -284,11 +284,12 @@ info "Dockerfile, docker-compose.yml, devcontainer.json"
 
 # Core files are copied verbatim — never templated. They carry the security
 # guarantee and must be identical in every install.
-for f in init-firewall.sh net-open.sh net-close.sh zshrc; do
+for f in init-firewall.sh net-open.sh net-close.sh airlock-warn.sh net-guard.sh zshrc; do
   cp "$SELF_DIR/core/$f" "$DEVDIR/$f"
 done
-chmod 0755 "$DEVDIR"/init-firewall.sh "$DEVDIR"/net-open.sh "$DEVDIR"/net-close.sh
-info "core: init-firewall.sh, net-open.sh, net-close.sh, zshrc"
+chmod 0755 "$DEVDIR"/init-firewall.sh "$DEVDIR"/net-open.sh "$DEVDIR"/net-close.sh \
+           "$DEVDIR"/airlock-warn.sh "$DEVDIR"/net-guard.sh
+info "core: init-firewall.sh, net-open.sh, net-close.sh, airlock-warn.sh, net-guard.sh, zshrc"
 
 # --- ccnet -------------------------------------------------------------------
 BINDIR="${CCNET_BINDIR:-$HOME/.local/bin}"
