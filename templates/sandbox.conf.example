@@ -20,6 +20,12 @@ PHP_VERSION=8.4
 NODE_VERSION=20
 MYSQL_VERSION=8.4
 
+# PHP's memory_limit, for the CLI and Apache alike. 128M is PHP's own default —
+# these images ship no php.ini at all. Raise it for image processing: GD decodes
+# to an uncompressed bitmap, about width * height * 4 bytes per copy, so one large
+# JPEG exhausts 128M. A size with a suffix, or -1 for unlimited.
+PHP_MEMORY_LIMIT=128M
+
 TZ=UTC
 
 # --- web --------------------------------------------------------------------

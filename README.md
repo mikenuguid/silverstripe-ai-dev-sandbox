@@ -140,6 +140,7 @@ a rebuild alone picks it up.
 ```sh
 PRESET=php-mysql
 PHP_VERSION=8.4        # also: NODE_VERSION, MYSQL_VERSION, TZ
+PHP_MEMORY_LIMIT=128M  # PHP's default; raise it for image processing
 HTTP_PORT=8080         # host port for the site
 DOCROOT=public         # web root, relative to the project
 DB_NAME=db

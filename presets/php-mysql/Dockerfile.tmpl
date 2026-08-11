@@ -28,6 +28,15 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" \
        pdo_mysql mysqli intl gd zip exif opcache tidy bcmath
 
+# These images ship NO php.ini, so every setting is the compiled-in default —
+# memory_limit is 128M. conf.d is read by both the CLI and Apache, so one file
+# covers `sake`/`composer` tasks and web requests alike.
+#
+# Raise it for image work: GD decodes to an uncompressed bitmap, roughly
+# width * height * 4 bytes per copy, so a single large JPEG exhausts 128M before
+# any resizing happens.
+RUN printf 'memory_limit = @@PHP_MEMORY_LIMIT@@\n' > /usr/local/etc/php/conf.d/zz-sandbox.ini
+
 ENV APACHE_DOCUMENT_ROOT=/workspace/@@DOCROOT@@
 RUN a2enmod rewrite headers \
     && sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \

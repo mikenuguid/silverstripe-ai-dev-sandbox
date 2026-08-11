@@ -59,6 +59,7 @@ nothing.
 PRESET=php-mysql
 
 PHP_VERSION=8.4
+PHP_MEMORY_LIMIT=128M
 NODE_VERSION=20
 MYSQL_VERSION=8.4
 TZ=UTC
@@ -83,14 +84,15 @@ and ignored. Any key you omit falls back to `presets/<name>/defaults.conf`.
 |---|---|---|---|
 | `PRESET` | `php-mysql` | picks `presets/<name>/` | Which template set renders |
 | `PHP_VERSION` | `8.4` | `Dockerfile.tmpl:6` → `FROM php:<v>-apache` | Any tag of the `php:<v>-apache` image |
-| `NODE_VERSION` | `20` | `Dockerfile.tmpl:36` → NodeSource setup script | Node major version |
+| `PHP_MEMORY_LIMIT` | `128M` | `Dockerfile.tmpl:38` → `conf.d/zz-sandbox.ini` | PHP's `memory_limit`, CLI and Apache alike. A size with a suffix, or `-1` |
+| `NODE_VERSION` | `20` | `Dockerfile.tmpl:45` → NodeSource setup script | Node major version |
 | `MYSQL_VERSION` | `8.4` | `docker-compose.yml.tmpl:82` → `image: mysql:<v>` | Any tag of the `mysql` image |
 | `TZ` | `UTC` | Dockerfile `ARG`/`ENV` + compose build arg | Container timezone |
 | `HTTP_PORT` | `8080` | `docker-compose.yml.tmpl:57` → `"<port>:80"` | Host port. Avoid 80/443 if another local stack uses them |
-| `DOCROOT` | `public` | `Dockerfile.tmpl:31` → `APACHE_DOCUMENT_ROOT` | Apache web root, relative to the project |
+| `DOCROOT` | `public` | `Dockerfile.tmpl:40` → `APACHE_DOCUMENT_ROOT` | Apache web root, relative to the project |
 | `DB_NAME` | `db` | compose `db` env | Database created on first start |
 | `DB_PASSWORD` | `root` | compose `db` env + healthcheck | Dev only — never exposed on a host port |
-| `SANDBOX_VOLUMES` | `vendor`, `node_modules` | **both** `Dockerfile.tmpl:56` mkdir list and the compose volume mounts + declarations | Generated dirs kept off the bind mount |
+| `SANDBOX_VOLUMES` | `vendor`, `node_modules` | **both** `Dockerfile.tmpl:65` mkdir list and the compose volume mounts + declarations | Generated dirs kept off the bind mount |
 | `EXTRA_ENV` | — | `docker-compose.yml.tmpl:52`, verbatim YAML | Extra environment on the app service |
 
 Line references are to the templates in this repo; the generated files mirror them, though
@@ -108,7 +110,7 @@ caches, uploaded assets. Three reasons they belong in volumes rather than on the
 3. It stops this stack and any other local stack (DDEV, Lando) corrupting each other's caches.
 
 This single list drives **both** the Dockerfile `mkdir` list and the compose volume list
-(`install.sh:203-227`), and that is deliberate. Never hand-edit one side of the generated
+(`install.sh:206-230`), and that is deliberate. Never hand-edit one side of the generated
 output. When the two disagree, Docker seeds the volume from a path that does not exist in the
 image, so it lands empty and owned by `root` — and the failure surfaces much later as an
 unwritable directory needing `docker volume rm`.
@@ -142,9 +144,9 @@ parse.
 
 ### Every scalar is validated
 
-Values are character-checked (`install.sh:176-197`) before interpolation. `PHP_VERSION`
-allows only `[A-Za-z0-9._-]`; `DOCROOT` must be relative and free of `..`; `HTTP_PORT` must
-be 1–65535. Anything else aborts the install.
+Values are character-checked (`install.sh:179-200`) before interpolation. `PHP_VERSION`
+allows only `[A-Za-z0-9._-]`; `PHP_MEMORY_LIMIT` only `[0-9KMGkmg-]`; `DOCROOT` must be
+relative and free of `..`; `HTTP_PORT` must be 1–65535. Anything else aborts the install.
 
 This is not fussiness. These values are interpolated into a Dockerfile that the host then
 *builds*, and `sandbox.conf` lives inside the project the sandboxed agent can write to. An
@@ -167,7 +169,7 @@ registry.yarnpkg.com
 tcp:db:3306
 ```
 
-Copied to `/etc/sandbox-allowlist` in the image (`Dockerfile.tmpl:98`), root-owned, `0644`.
+Copied to `/etc/sandbox-allowlist` in the image (`Dockerfile.tmpl:107`), root-owned, `0644`.
 Parsed at firewall-apply time (`core/init-firewall.sh:54-70`). Two entry forms:
 
 | Entry | Meaning |

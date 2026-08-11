@@ -97,7 +97,7 @@ read_conf() {
     val="${line#*=}"
     key="$(echo "$key" | tr -d '[:space:]')"
     case "$key" in
-      PRESET|PHP_VERSION|NODE_VERSION|MYSQL_VERSION|TZ|HTTP_PORT|DOCROOT|DB_NAME|DB_PASSWORD) ;;
+      PRESET|PHP_VERSION|PHP_MEMORY_LIMIT|NODE_VERSION|MYSQL_VERSION|TZ|HTTP_PORT|DOCROOT|DB_NAME|DB_PASSWORD) ;;
       SANDBOX_VOLUMES|EXTRA_ENV)
         # Multi-line quoted value: accumulate until the closing quote.
         if [ "${val:0:1}" = '"' ] && [ "${val: -1}" != '"' -o ${#val} -eq 1 ]; then
@@ -147,14 +147,14 @@ read_conf "$DEVDIR/sandbox.conf"
 
 if [ "$INTERACTIVE" = "1" ]; then
   echo "Interactive setup (blank keeps the current value)"
-  for k in PHP_VERSION NODE_VERSION MYSQL_VERSION HTTP_PORT DOCROOT TZ; do
+  for k in PHP_VERSION PHP_MEMORY_LIMIT NODE_VERSION MYSQL_VERSION HTTP_PORT DOCROOT TZ; do
     read -r -p "  $k [${CONF[$k]:-}]: " ans
     [ -n "$ans" ] && CONF["$k"]="$ans"
   done
   {
     echo "# ai-dev-sandbox — written by install.sh --interactive"
     echo "PRESET=$PRESET"
-    for k in PHP_VERSION NODE_VERSION MYSQL_VERSION TZ HTTP_PORT DOCROOT DB_NAME DB_PASSWORD; do
+    for k in PHP_VERSION PHP_MEMORY_LIMIT NODE_VERSION MYSQL_VERSION TZ HTTP_PORT DOCROOT DB_NAME DB_PASSWORD; do
       echo "$k=${CONF[$k]:-}"
     done
     printf 'SANDBOX_VOLUMES="%s"\n' "${CONF[SANDBOX_VOLUMES]:-}"
@@ -181,6 +181,9 @@ check() {
   esac
 }
 check PHP_VERSION   '!A-Za-z0-9._-'
+# A PHP size suffix or -1, nothing else. This lands in a php.ini fragment written
+# by a RUN, so a space or newline here would inject a second directive.
+check PHP_MEMORY_LIMIT '!0-9KMGkmg-'
 check NODE_VERSION  '!0-9'
 check MYSQL_VERSION '!A-Za-z0-9._-'
 check TZ            '!A-Za-z0-9_+/-'
@@ -255,6 +258,7 @@ render() {
   local src="$1" dest="$2" content
   content="$(cat "$src")"
   content="${content//@@PHP_VERSION@@/${CONF[PHP_VERSION]:-8.4}}"
+  content="${content//@@PHP_MEMORY_LIMIT@@/${CONF[PHP_MEMORY_LIMIT]:-128M}}"
   content="${content//@@NODE_VERSION@@/${CONF[NODE_VERSION]:-20}}"
   content="${content//@@MYSQL_VERSION@@/${CONF[MYSQL_VERSION]:-8.4}}"
   content="${content//@@TZ@@/${CONF[TZ]:-UTC}}"

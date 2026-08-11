@@ -23,7 +23,7 @@ guarantee and has to be byte-identical in every install.
 ## The placeholder contract
 
 Placeholders are `@@UPPER_SNAKE@@`, substituted by bash parameter expansion in
-`install.sh:254-273` — not `sed`, so values never need escaping and multi-line blocks
+`install.sh:257-277` — not `sed`, so values never need escaping and multi-line blocks
 substitute cleanly. A placeholder you do not use is simply left unsubstituted, so an
 unrecognised or misspelled one ships into the generated file as literal text.
 
@@ -35,14 +35,26 @@ unrecognised or misspelled one ships into the generated file as literal text.
 | `@@USER_UID@@` / `@@USER_GID@@` | invoking user | **Required** — must match the host repo owner or the sandbox user cannot write to the bind mount |
 | `@@EXTRA_ENV@@` | `EXTRA_ENV` | Multi-line YAML, indented 6 spaces. **Required** |
 | `@@TZ@@`, `@@HTTP_PORT@@`, `@@DOCROOT@@` | `sandbox.conf` | |
-| `@@PHP_VERSION@@`, `@@NODE_VERSION@@`, `@@MYSQL_VERSION@@` | `sandbox.conf` | Stack-specific; ignore the ones your stack has no use for |
+| `@@PHP_VERSION@@`, `@@PHP_MEMORY_LIMIT@@`, `@@NODE_VERSION@@`, `@@MYSQL_VERSION@@` | `sandbox.conf` | Stack-specific; ignore the ones your stack has no use for |
 | `@@DB_NAME@@`, `@@DB_PASSWORD@@` | `sandbox.conf` | |
 | `@@PROJECT_NAME@@` | project directory basename | |
 
-Adding a **new** key means editing `install.sh` in three places: the recognised-key list in
-`read_conf` (`install.sh:100-101`), a `check` call to validate its characters
-(`install.sh:183-190`), and a substitution line in `render`. Skipping the validation is not
-an option — see [Every scalar is validated](configuration.md#every-scalar-is-validated).
+Adding a **new** key means five edits, and missing any of the last three fails quietly rather
+than loudly:
+
+1. The recognised-key list in `read_conf` (`install.sh:100`) — otherwise the key is warned
+   about and dropped.
+2. A `check` call validating its characters (`install.sh:183-193`). Not optional; see
+   [Every scalar is validated](configuration.md#every-scalar-is-validated).
+3. A substitution line in `render` (`install.sh:257-277`) — otherwise the literal
+   `@@KEY@@` ships into the generated file.
+4. **Both** key lists in the `--interactive` block (`install.sh:150` and `install.sh:157`).
+   The second one rewrites `sandbox.conf` from a fixed list, so a key missing from it is
+   silently deleted from the user's config on the next `--interactive` run.
+5. A default in every `presets/*/defaults.conf`, so projects that omit the key still render.
+
+A `render` fallback (`${CONF[KEY]:-<default>}`) covers a preset that has no default, but keep
+both in step: the fallback is the last resort, `defaults.conf` is the documented value.
 
 ## Adding a preset
 
