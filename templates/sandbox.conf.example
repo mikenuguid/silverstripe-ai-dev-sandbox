@@ -1,8 +1,15 @@
 # ai-dev-sandbox — per-project stack settings.
 #
-# Changing anything here requires `ccnet rebuild`, because these values are
-# compiled into the image. For the domain allowlist see allowlist.txt, which is
-# also baked in and also needs a rebuild.
+# These values are compiled into the image, so a change takes THREE steps —
+# `ccnet rebuild` alone does nothing, because nothing has regenerated the
+# Dockerfile from this file yet:
+#
+#   1. edit this file
+#   2. re-run the installer:  ./install.sh --project <this project>
+#   3. ccnet rebuild
+#
+# For the domain allowlist see allowlist.txt, which is also baked in and follows
+# the same three steps. Full detail: docs/configuration.md in the repo.
 #
 # Keys left unset fall back to the preset defaults.
 

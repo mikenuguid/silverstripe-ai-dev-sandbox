@@ -309,5 +309,10 @@ Next steps
   5. ccnet close           # before any unattended run
   6. ccnet status          # should read: closed ... (enforced)
 
-The allowlist is baked into the image; changing it needs 'ccnet rebuild'.
+Changing configuration later
+  allowlist.txt   edit, then 'ccnet rebuild' (copied into the image verbatim)
+  sandbox.conf    edit, re-run this installer, THEN 'ccnet rebuild' — its values
+                  are compiled into the generated Dockerfile and compose file, so
+                  a rebuild alone quietly gives you the old stack back.
+  See docs/configuration.md.
 EOF

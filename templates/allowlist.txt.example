@@ -1,8 +1,15 @@
 # ai-dev-sandbox — network allowlist.
 #
 # Baked into the image, root-owned, and NOT writable from inside the container.
-# Changing it requires `ccnet rebuild`, which only the host can trigger — that
-# is deliberate, so a sandboxed process cannot widen its own boundary.
+#
+# Changing it requires `ccnet rebuild`, which only the host can trigger — that is
+# deliberate, so a sandboxed process cannot widen its own boundary. This file sits
+# in the build context and is COPYd straight in, so no installer re-run is needed.
+# (sandbox.conf is different: it is COMPILED into the generated Dockerfile, so a
+# change there needs ./install.sh --project <project> before the rebuild.)
+#
+# `ccnet open` / `ccnet close` need no rebuild — they toggle the airlock against
+# the list already baked in.
 #
 # api.anthropic.com is always permitted and must not be listed here; without it
 # Claude cannot run at all.

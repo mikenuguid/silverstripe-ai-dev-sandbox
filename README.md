@@ -123,109 +123,47 @@ installed dependencies; dev servers on localhost.
 
 ## Configuration
 
-Two files, and the split is about **cost of change**.
+Two files in `.devcontainer/`, and the split is about **cost of change**.
 
-### `.devcontainer/sandbox.conf`
+| File | Controls | To change it |
+|---|---|---|
+| `sandbox.conf` | Stack shape — versions, ports, docroot, volumes, environment | Edit → re-run `install.sh --project <project>` → `ccnet rebuild` |
+| `allowlist.txt` | What the network may reach | Edit → `ccnet rebuild` |
 
-Stack shape. Compiled into the image, so changes need `ccnet rebuild`.
+`sandbox.conf` is **compiled** into the generated Dockerfile and compose file, which is why it
+takes the extra step: a rebuild on its own silently gives you the old stack back, because
+nothing has regenerated those files yet. `allowlist.txt` is copied into the image verbatim, so
+a rebuild alone picks it up.
+
+`sandbox.conf`:
 
 ```sh
 PRESET=php-mysql
-
-PHP_VERSION=8.4
-NODE_VERSION=20
-MYSQL_VERSION=8.4
-TZ=UTC
-
-HTTP_PORT=8080          # host port for the site
-DOCROOT=public          # web root, relative to the project
-
+PHP_VERSION=8.4        # also: NODE_VERSION, MYSQL_VERSION, TZ
+HTTP_PORT=8080         # host port for the site
+DOCROOT=public         # web root, relative to the project
 DB_NAME=db
 DB_PASSWORD=root
 
-SANDBOX_VOLUMES="
+SANDBOX_VOLUMES="      # generated dirs kept OFF the bind mount
 vendor
 node_modules
 public/assets
 "
 ```
 
-| Key | Default | Notes |
-|---|---|---|
-| `PRESET` | `php-mysql` | Which preset to render from |
-| `PHP_VERSION` | `8.4` | Any tag of the `php:<v>-apache` image |
-| `NODE_VERSION` | `20` | NodeSource major version |
-| `MYSQL_VERSION` | `8.4` | Any tag of the `mysql` image |
-| `TZ` | `UTC` | Container timezone |
-| `HTTP_PORT` | `8080` | Host port. Avoid 80/443 if another local stack uses them |
-| `DOCROOT` | `public` | Web root, relative to the project |
-| `DB_NAME` | `db` | Database created on first start |
-| `DB_PASSWORD` | `root` | Dev only — never exposed on a host port |
-| `SANDBOX_VOLUMES` | `vendor`, `node_modules` | Generated dirs kept off the bind mount |
-| `EXTRA_ENV` | — | Extra environment, added verbatim to the app service |
-
-**`SANDBOX_VOLUMES` is the one to get right.** List anything *generated* rather than
-authored: dependency trees, build output, framework caches, uploaded assets. Three reasons
-they belong in volumes rather than on the bind mount:
-
-1. Host files there are often owned by another user (`www-data`, `root`). The sandbox user
-   can write via group but cannot `chmod`, which needs ownership — and frameworks do chmod.
-2. Host and container toolchain versions differ, so sharing built dependencies mixes
-   incompatible native builds.
-3. It stops this stack and any other local stack (DDEV, Lando) corrupting each other's caches.
-
-This single list generates **both** the Dockerfile `mkdir` list and the compose volume list.
-That is deliberate: when those two disagree, Docker creates the volume owned by `root` and
-the failure surfaces much later as an unwritable directory needing `docker volume rm`.
-
-`EXTRA_ENV` is where framework config goes, and where you opt out of packages whose
-postinstall downloads binaries from hosts you have not allowlisted:
-
-```sh
-EXTRA_ENV="
-APP_ENV: dev
-CYPRESS_INSTALL_BINARY: \"0\"
-PUPPETEER_SKIP_DOWNLOAD: \"1\"
-"
-```
-
-### `.devcontainer/allowlist.txt`
-
-What the network may reach. Also baked into the image, so also needs `ccnet rebuild`.
+`allowlist.txt`:
 
 ```
-# Domains — reachable only when the airlock is OPEN
-github.com
-api.github.com
-codeload.github.com
-objects.githubusercontent.com
-packagist.org
-repo.packagist.org
-registry.npmjs.org
-registry.yarnpkg.com
-
-# Internal services — reachable in BOTH modes
-tcp:db:3306
+github.com             # a domain — reachable only while the airlock is OPEN
+tcp:db:3306            # an internal service — reachable in BOTH modes
 ```
-
-| Entry | Meaning |
-|---|---|
-| `example.com` | A domain. Allowed only while **open**. |
-| `tcp:host:port` | An internal service. Allowed in **both** modes, because an app must still reach its database while closed. Must resolve to a private address; a public one is refused and logged. |
 
 `api.anthropic.com` is always permitted and must not be listed — without it the agent cannot
 run at all.
 
-**Why it is baked in rather than mounted.** An earlier design mounted this file read-only at
-`/etc/sandbox-allowlist`. That gives no protection: the same file is also visible read-write
-under `/workspace`, and `:ro` only blocks writes *through that mount point*, not through
-another path to the same inode. The sandboxed process could edit it and run
-`sudo init-firewall.sh` to apply its own additions. Baking it in means changing the allowlist
-requires a rebuild, which only the host can trigger.
-
-The same reasoning applies to `sandbox.conf`: the agent can edit it, but nothing happens
-until **you** rebuild. Treat `.devcontainer/` changes as you would any other code change —
-review them.
+Every key, what it renders into, the validation rules, and the reasons the allowlist is baked
+in rather than mounted: **[docs/configuration.md](docs/configuration.md)**.
 
 ## How it works
 
@@ -245,53 +183,15 @@ Two constraints drive the design:
 **The toggle must sit outside the agent's reach.** Control lives on the host, over
 `docker exec`, and the container has **no Docker socket**.
 
-### The privilege model
-
-The container has `NET_ADMIN`, so root inside it can rewrite the firewall. The whole boundary
-therefore rests on the sandbox user not being root and not being able to become root:
-
-```
-$ sudo -n -l
-User dev may run the following commands:
-    (root) NOPASSWD: /usr/local/bin/init-firewall.sh
-```
-
-One command. And it is useless for escaping, because:
-
-1. `init-firewall.sh` is root-owned `0755` — executable, not editable
-2. `/etc/claude-net-mode` is root-owned `0644` — readable, not writable
-3. The script reads its mode from that file at runtime
-
-So the only privileged action available re-applies whatever mode is already set. It is
-idempotent by construction — not a gate that might be bypassed, but an operation with
-nothing to bypass. `net-open.sh` and `net-close.sh` are deliberately **not** in sudoers.
-
-### Credentials
-
-There are two sets, and only one stays outside.
-
-**The agent's own credential is inside**, and must be. `/home/dev/.claude` is a named
-*volume*, not a bind to your host `~/.claude`, so the container gets its own login and your
-host credential is never exposed. You log in once, ever — it survives rebuilds.
-
-**Git and cloud credentials stay on the host.** They live in `~/.gitconfig`'s credential
-helper, `~/.config/gh/`, `~/.ssh/` — all outside the workspace, so none are mounted. SSH
-agent forwarding is explicitly disabled: forwarding shares a *capability*, not a secret, so
-anything in the container could ask the agent to sign, for every host that key opens.
-
-The default workflow is therefore **commit inside, push from the host**. `/workspace/.git`
-*is* your repository's `.git`, so commits land on host disk instantly; you push from a host
-terminal using credentials that never entered the container.
-
-If you must push from inside, use a fine-grained token scoped to that one repository with a
-short expiry, passed via `EXTRA_ENV`. It is inert while the network is closed.
+The privilege model that makes `sudo init-firewall.sh` safe to grant, and where each
+credential lives: **[docs/how-it-works.md](docs/how-it-works.md)**.
 
 ## Troubleshooting
 
 | Symptom | Cause and fix |
 |---|---|
 | `ccnet: no running devcontainer` | Not running, wrong folder, or the container was started with plain `docker compose up`, which sets no `devcontainer.local_folder` label. `ccnet up` will *adopt* such a container rather than relabel it — use **`ccnet rebuild`** to recreate it properly. |
-| Edited `.devcontainer/*` but nothing changed | `ccnet up` reuses a running container. Use `ccnet rebuild`. |
+| Edited `.devcontainer/*` but nothing changed | `ccnet up` reuses a running container — use `ccnet rebuild`. If you edited `sandbox.conf`, re-run `install.sh --project <project>` **first**: the rebuild reads the generated files, which still hold the old values. |
 | Container will not start, firewall test fails | A domain failed to resolve, or `api.anthropic.com` is unreachable. Non-zero exit is by design. |
 | A command hangs instead of erroring | Firewall, not auth. The host is not in the ipset — add it to `allowlist.txt` and `ccnet rebuild`. |
 | Package install fails with a connection error | Airlock closed, or the registry is missing from `allowlist.txt`. Check `ccnet status`. |
@@ -336,6 +236,11 @@ overlap; source and `.git` are still shared. Stop the other stack first.
 That hands it full control of the host Docker daemon — it could start a privileged container
 and mount the host filesystem. It does not weaken the boundary, it removes it.
 
-## Adding a preset
+## Further reading
 
-See `CLAUDE.md`.
+| | |
+|---|---|
+| [docs/configuration.md](docs/configuration.md) | Configuration in full — every key, what it renders into, the validation rules, and the edit → re-render → rebuild loop |
+| [docs/how-it-works.md](docs/how-it-works.md) | The privilege model and the credential split, in full |
+| [docs/presets.md](docs/presets.md) | Changing or adding a preset — template anatomy, the placeholder contract, the verification suite |
+| [CLAUDE.md](CLAUDE.md) | The security invariants any change to `core/` or `bin/ccnet` must preserve |

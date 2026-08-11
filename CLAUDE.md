@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-Guidance for AI agents working **on this repository**. For using the sandbox, see `README.md`.
+Guidance for AI agents working **on this repository**. For using the sandbox, see `README.md`;
+for the mechanics of changing config or presets, `docs/configuration.md` and `docs/presets.md`.
+Those two docs are the long form of the sections below — keep them in sync with any change here.
 
 ## What this repo is
 
@@ -75,6 +77,8 @@ rather than working around it.
   compose volume list. Never let those diverge.
 
 ## Adding a preset
+
+Full walkthrough in `docs/presets.md`. In brief:
 
 1. `presets/<name>/` with `Dockerfile.tmpl`, `docker-compose.yml.tmpl`, `defaults.conf`.
 2. Support the same placeholders; at minimum `@@MKDIR_LIST@@`, `@@VOLUME_MOUNTS@@`,
