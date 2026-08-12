@@ -99,8 +99,10 @@ RUN chown root:root /usr/local/bin/init-firewall.sh /usr/local/bin/net-open.sh /
 # Airlock hooks for an agent running inside the container:
 #   SessionStart -> airlock-warn.sh   warns when the airlock is open, and detects
 #                                     the worse case of no firewall at all
-#   PreToolUse   -> net-guard.sh      refuses WebFetch/WebSearch when the airlock
-#                                     is open AND the session is unattended
+#   PreToolUse   -> net-guard.sh      refuses WebFetch/WebSearch in unattended
+#                                     sessions (WebFetch only while open; the
+#                                     firewall covers it when closed, but never
+#                                     sees WebSearch)
 #
 # Advisory, not part of the guarantee. They go in MANAGED settings, not the
 # project and not /home/dev/.claude: that directory is a named volume, seeded

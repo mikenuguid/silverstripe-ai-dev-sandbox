@@ -153,14 +153,30 @@ malformed line is discarded in silence rather than erroring. Confirm the file it
 root-owned and unwritable, along with `/etc/claude-code/managed-settings.json`.
 
 **The network guard**: as the sandbox user, feed `/usr/local/bin/net-guard.sh` a payload on
-stdin and check each combination. Only open-plus-unattended may deny:
+stdin and check each combination. `tool_name` matters as much as the mode — `WebFetch` gets a
+pass while closed because the firewall refuses it, and `WebSearch` must not, because it runs
+server-side over the Anthropic channel that stays open in both modes:
 
 ```bash
-p() { printf '{"permission_mode":"%s","tool_name":"WebFetch"}' "$1" | /usr/local/bin/net-guard.sh; }
-p default            # while OPEN: no output (allowed)
-p bypassPermissions  # while OPEN: JSON with permissionDecision "deny"
-p bypassPermissions  # while CLOSED: no output (the firewall already refuses)
+p() { printf '{"permission_mode":"%s","tool_name":"%s"}' "$1" "$2" | /usr/local/bin/net-guard.sh; }
+
+# while OPEN
+p default           WebFetch    # no output (attended)
+p bypassPermissions WebFetch    # JSON with permissionDecision "deny"
+p bypassPermissions WebSearch   # deny
+
+# while CLOSED
+p bypassPermissions WebFetch    # no output — the firewall already refuses it
+p bypassPermissions WebSearch   # deny — the firewall never sees this one
+p default           WebSearch   # no output (attended)
+
+# unknown and undeterminable modes fail closed, in either airlock state
+p someFutureMode    WebSearch   # deny
+printf '{}' | /usr/local/bin/net-guard.sh   # deny
 ```
+
+A guard that passes every case above but never fires in a real session is still broken, so
+confirm it is wired up too: `grep -A2 PreToolUse /etc/claude-code/managed-settings.json`.
 
 **Fail-closed**: point a domain in `allowlist.txt` at something unresolvable, `ccnet open`,
 and confirm the firewall forces the mode back to `closed` rather than leaving the mode file

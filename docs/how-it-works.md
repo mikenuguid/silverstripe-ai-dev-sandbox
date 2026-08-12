@@ -70,15 +70,28 @@ and noise is what gets warnings ignored.
 
 **When nobody is reading**: a warning is useless in an unattended run, so `core/net-guard.sh`
 runs as a `PreToolUse` hook on `WebFetch|WebSearch` and *refuses* rather than warns. It denies
-exactly one combination — the airlock is `open` **and** the session's `permission_mode` is
-`bypassPermissions`, `dontAsk` or `auto`:
+whenever the session is unattended, which for `WebFetch` means only while the airlock is open:
 
-| Airlock | Session | Result |
-|---|---|---|
-| closed | any | allowed — the firewall already refuses these connections |
-| open | `default`, `plan`, `acceptEdits` | allowed — `default` already prompts for `WebFetch`; a second gate is friction with no gain |
-| open | `auto`, `dontAsk`, `bypassPermissions` | **denied** |
-| open | undeterminable | **denied** — fails closed, like `init-firewall.sh` |
+| Tool | Airlock | Session | Result |
+|---|---|---|---|
+| `WebFetch` | closed | any | allowed — the firewall already refuses the connection |
+| `WebFetch` | open | `default`, `plan`, `acceptEdits` | allowed — `default` already prompts for it; a second gate is friction with no gain |
+| `WebFetch` | open | anything else | **denied** |
+| `WebSearch` | **either** | `default`, `plan`, `acceptEdits` | allowed |
+| `WebSearch` | **either** | anything else | **denied** |
+
+`WebSearch` does not get the closed-mode pass, because the firewall never sees it. It runs
+server-side and its results arrive over the `api.anthropic.com` channel that `init-firewall.sh`
+permits as `required` in **both** modes. Measured, not assumed: with the airlock closed,
+`WebFetch` of `github.com` returned `ECONNREFUSED` while `WebSearch` returned snippets from four
+external sites. Closed mode was therefore the *more* permissive state for search — the inverse
+of the intent, since search results are attacker-influenceable text and that is injection
+surface whatever the airlock is doing.
+
+"Anything else" is literal: the guard **allowlists** the attended modes rather than denylisting
+the unattended ones. An unrecognised or undeterminable `permission_mode` denies, so a mode added
+or renamed by a future release fails closed instead of silently passing. The earlier denylist
+form — `bypassPermissions|dontAsk|auto` — would have opened this up with no sign.
 
 `deny` rather than `ask`, deliberately: deny is documented to block, whereas whether `ask` is
 auto-approved under `--dangerously-skip-permissions` is not something this should rest on.
@@ -91,6 +104,13 @@ suite calling an API — is not matched, and must not be: those are precisely wh
 airlock is *for*, and matching command strings for `curl` is trivially evaded. The iptables
 airlock remains the control; this only closes the case where an agent reaches out through its
 own tools while no one is watching.
+
+The `WebSearch` case generalises, and is worth carrying into any change here: **iptables cannot
+see anything whose transport is the `api.anthropic.com` channel**, because that connection is
+`required` in both modes — Claude does not run without it. Server-side tools and remote MCP
+servers reached through the API are outside the airlock in *every* state, and a hook is the only
+control available for them. The matcher is a list of names, so anything new is permitted until
+it is added.
 
 ## Credentials
 

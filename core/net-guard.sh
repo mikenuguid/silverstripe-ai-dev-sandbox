@@ -8,9 +8,10 @@
 # command strings for `curl` is trivially evaded anyway. The iptables airlock
 # remains the control.
 #
-# What it does buy: the one combination that should never happen is an OPEN
-# airlock plus an agent running unattended. Then nobody is reading the warning
-# that airlock-warn.sh injected at session start, so refuse instead of warn.
+# What it does buy: the one combination that should never happen is an agent
+# running unattended with a network tool available. Then nobody is reading the
+# warning that airlock-warn.sh injected at session start, so refuse instead of
+# warn.
 #
 # Attended sessions are left alone. `default` already prompts for WebFetch, so a
 # second gate would be friction with no gain — and blocking network tools during
@@ -33,30 +34,46 @@ deny() {
   exit 0
 }
 
-# Closed is the normal state and needs no guard: the firewall already refuses
-# these connections. Staying silent here keeps the hook off the hot path.
-[ "$(cat "$MODE_FILE" 2>/dev/null || echo unknown)" = "open" ] || exit 0
+MODE=$(cat "$MODE_FILE" 2>/dev/null || echo unknown)
 
 # jq is not guaranteed in every preset's image, so fall back to a text match.
 # The grep form takes the FIRST occurrence, which is why jq is preferred: JSON
 # does not guarantee key order, and tool_input can contain arbitrary text.
 if command -v jq >/dev/null 2>&1; then
   PERM=$(printf '%s' "$INPUT" | jq -r '.permission_mode // empty' 2>/dev/null || true)
+  TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || true)
 else
-  PERM=$(printf '%s' "$INPUT" | tr -d ' \n' \
-         | grep -o '"permission_mode":"[A-Za-z]*"' | head -1 | cut -d'"' -f4 || true)
+  FLAT=$(printf '%s' "$INPUT" | tr -d ' \n')
+  PERM=$(printf '%s' "$FLAT" | grep -o '"permission_mode":"[A-Za-z]*"' | head -1 | cut -d'"' -f4 || true)
+  TOOL=$(printf '%s' "$FLAT" | grep -o '"tool_name":"[A-Za-z]*"'       | head -1 | cut -d'"' -f4 || true)
 fi
 
+# WebFetch while closed needs no guard: the firewall already refuses the
+# connection, and staying silent keeps the hook off the hot path.
+#
+# WebSearch is NOT covered by that reasoning and must not take this exit. It
+# executes server-side and its results arrive over the api.anthropic.com channel,
+# which init-firewall.sh permits as `required` in BOTH modes — so iptables never
+# sees it. Measured, not assumed: with the airlock closed, WebFetch(github.com)
+# returned ECONNREFUSED while WebSearch returned snippets from four external
+# sites. Closed mode was therefore the *more* permissive state for search, which
+# inverts the design's intent — search results are attacker-influenceable text,
+# and that is injection surface whatever the airlock is doing.
+#
+# An unreadable tool_name takes the guarded path, matching the fail-closed rule
+# below.
+if [ "$MODE" != "open" ] && [ "$TOOL" = "WebFetch" ]; then
+  exit 0
+fi
+
+# Allowlist the attended modes rather than denylisting the unattended ones. The
+# denylist form (bypassPermissions|dontAsk|auto) silently permitted anything it
+# did not recognise, so a mode added or renamed by a future Claude Code release
+# would have opened this up with no sign. Unknown now denies, like an
+# undeterminable one always has.
 case "$PERM" in
-  bypassPermissions|dontAsk|auto)
-    deny "REFUSED: the sandbox network airlock is OPEN and this session is running unattended. That combination is what the airlock exists to prevent - an open network is the exposure window that makes prompt injection worth attempting, and no one is watching this run. Stop and tell the user to run 'ccnet close' on the host, then retry. Do not attempt the same fetch through Bash instead."
-    ;;
-  "")
-    # Fail closed, matching init-firewall.sh: if the state cannot be determined,
-    # the safe reading is the dangerous one.
-    deny "REFUSED: the sandbox network airlock is OPEN and this hook could not determine the session's permission mode, so it is failing closed. Tell the user to run 'ccnet close' on the host, or to retry in an interactive session."
-    ;;
+  default|plan|acceptEdits) exit 0 ;;
+  "") deny "REFUSED: this hook could not determine the session's permission mode, so it is failing closed. Network tools are refused in unattended sessions. Tell the user to retry in an interactive session, and if the airlock is open, to run 'ccnet close' on the host." ;;
 esac
 
-# Attended (default, plan, acceptEdits): defer to the normal permission flow.
-exit 0
+deny "REFUSED: this session is running unattended and no one is watching it. Network tools are the channel an injected instruction reaches for first, and their content is attacker-influenceable regardless of the airlock: WebSearch results arrive over the Anthropic API even while the airlock is closed. Stop and tell the user to retry in an interactive session, or - if the airlock is open - to run 'ccnet close' on the host first. Do not attempt the same request through Bash instead."
