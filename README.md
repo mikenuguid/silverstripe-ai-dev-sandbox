@@ -1,7 +1,7 @@
-# ai-dev-sandbox
+# Silverstripe AI Dev Sandbox
 
-A hardened devcontainer for running AI coding agents unattended, with a **network airlock**
-you control from the host.
+A hardened devcontainer for running AI coding agents unattended on Silverstripe CMS
+projects, with a **network airlock** you control from the host.
 
 The container's network is closed by default — reachable only to the Claude API, so the
 agent still runs — and you open it deliberately, for the seconds a dependency install or a
@@ -38,8 +38,8 @@ network no longer holds.
 ## Install
 
 ```bash
-git clone https://github.com/mikenuguid/ai-dev-sandbox.git
-cd ai-dev-sandbox
+git clone https://github.com/mikenuguid/silverstripe-ai-dev-sandbox.git
+cd silverstripe-ai-dev-sandbox
 ./install.sh --project /path/to/your/project
 ```
 
