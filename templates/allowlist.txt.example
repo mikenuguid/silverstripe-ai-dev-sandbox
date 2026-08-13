@@ -45,5 +45,27 @@ registry.yarnpkg.com
 # crates.io
 # static.crates.io
 
+# Browser binaries for e2e suites — uncomment as needed. These are NOT
+# registries: each is a postinstall script fetching a browser tarball, which is
+# why allowlisting the registries alone still leaves `yarn install` failing on a
+# project using Cypress or Puppeteer. The failure looks like a hang, not a
+# refusal — a DROP surfaces as AggregateError/EHOSTUNREACH, so it reads as a
+# proxy problem and sends you looking in the wrong place.
+#
+# Cypress app: download.cypress.io 302s to cdn.cypress.io, so both are needed.
+# download.cypress.io
+# cdn.cypress.io
+# Chrome + chromedriver: puppeteer and chromedriver fetch binaries from Google
+# storage and read their version index from googlechromelabs.
+# storage.googleapis.com
+# chromedriver.storage.googleapis.com
+# googlechromelabs.github.io
+#
+# Note storage.googleapis.com resolves to ~11 addresses across many /24s and
+# Google rotates them, so the /24 expansion is especially wide here and a stale
+# ipset needs a re-run of `ccnet open` to re-resolve. Downloading a browser is
+# also not the same as being able to run one: Chrome needs libnss3, libatk,
+# libgbm and friends, which is a preset change, not an allowlist one.
+
 # --- internal services, reachable in BOTH modes -----------------------------
 tcp:db:3306
