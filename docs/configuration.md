@@ -60,7 +60,7 @@ PRESET=php-mysql
 
 PHP_VERSION=8.4
 PHP_MEMORY_LIMIT=128M
-NODE_VERSION=20
+NODE_VERSION=22
 MYSQL_VERSION=8.4
 TZ=UTC
 
@@ -85,7 +85,7 @@ and ignored. Any key you omit falls back to `presets/<name>/defaults.conf`.
 | `PRESET` | `php-mysql` | picks `presets/<name>/` | Which template set renders |
 | `PHP_VERSION` | `8.4` | `Dockerfile.tmpl:6` → `FROM php:<v>-apache` | Any tag of the `php:<v>-apache` image |
 | `PHP_MEMORY_LIMIT` | `128M` | `Dockerfile.tmpl:38` → `conf.d/zz-sandbox.ini` | PHP's `memory_limit`, CLI and Apache alike. A size with a suffix, or `-1` |
-| `NODE_VERSION` | `20` | `Dockerfile.tmpl:45` → NodeSource setup script | Node major version |
+| `NODE_VERSION` | `22` | `Dockerfile.tmpl:45` → NodeSource setup script | Node major version |
 | `MYSQL_VERSION` | `8.4` | `docker-compose.yml.tmpl:87` → `image: mysql:<v>` | Any tag of the `mysql` image |
 | `TZ` | `UTC` | Dockerfile `ARG`/`ENV` + compose build arg | Container timezone |
 | `HTTP_PORT` | `8080` | `docker-compose.yml.tmpl:62` → `"<port>:80"` | Host port. Avoid 80/443 if another local stack uses them |
@@ -95,6 +95,8 @@ and ignored. Any key you omit falls back to `presets/<name>/defaults.conf`.
 | `SANDBOX_VOLUMES` | `vendor`, `node_modules` | **both** `Dockerfile.tmpl:67` mkdir list and the compose volume mounts + declarations | Generated dirs kept off the bind mount |
 | `HOST_CLAUDE_MD` | `yes` | `docker-compose.yml.tmpl` `@@CLAUDE_MOUNTS@@` | `yes` or `no`. Mounts host `~/.claude/CLAUDE.md` and `~/.claude/agents/` read-only; never credentials. Must be exactly `yes` or `no`. `install.sh --no-claude-md` forces `no` for one run and is the only form the sandbox cannot undo (it can edit `sandbox.conf`; the paths stay fixed, so the worst case is the default) |
 | `EXTRA_ENV` | — | `docker-compose.yml.tmpl:57`, verbatim YAML | Extra environment on the app service |
+
+Upgrading from `NODE_VERSION=20`: `install.sh` preserves your `sandbox.conf`, so set `NODE_VERSION=22` in `.devcontainer/sandbox.conf`, re-run `install.sh`, then `ccnet rebuild`. Claude Code 2.1.198+ needs Node >=22.
 
 Notes on `HOST_CLAUDE_MD`: the binds nest inside the `claude-config` volume and hide any
 same-named file the volume held before. A volume created before this feature can already hold

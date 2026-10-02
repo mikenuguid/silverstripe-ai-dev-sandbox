@@ -28,7 +28,7 @@ push takes.
 | **devcontainer CLI** | `npm i -g @devcontainers/cli` — needed by `ccnet up`. |
 | **An editor** | Optional. VS Code (Dev Containers extension), JetBrains, Cursor, or none at all. |
 
-The `php-mysql` preset provisions **PHP 8.4 (Apache) · Node 20 · MySQL 8.4 · Composer 2**,
+The `php-mysql` preset provisions **PHP 8.4 (Apache) · Node 22 · MySQL 8.4 · Composer 2**,
 all configurable in `sandbox.conf`.
 
 Cloud and remote dev environments such as GitHub Codespaces are **not suitable** — your

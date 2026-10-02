@@ -293,7 +293,7 @@ render() {
   content="$(cat "$src")"
   content="${content//@@PHP_VERSION@@/${CONF[PHP_VERSION]:-8.4}}"
   content="${content//@@PHP_MEMORY_LIMIT@@/${CONF[PHP_MEMORY_LIMIT]:-128M}}"
-  content="${content//@@NODE_VERSION@@/${CONF[NODE_VERSION]:-20}}"
+  content="${content//@@NODE_VERSION@@/${CONF[NODE_VERSION]:-22}}"
   content="${content//@@MYSQL_VERSION@@/${CONF[MYSQL_VERSION]:-8.4}}"
   content="${content//@@TZ@@/${CONF[TZ]:-UTC}}"
   content="${content//@@HTTP_PORT@@/${CONF[HTTP_PORT]:-8080}}"

@@ -17,7 +17,8 @@ PRESET=php-mysql
 
 # --- versions ---------------------------------------------------------------
 PHP_VERSION=8.4
-NODE_VERSION=20
+# Claude Code 2.1.198+ needs Node >=22; on 20, npm silently installs an old Claude.
+NODE_VERSION=22
 MYSQL_VERSION=8.4
 
 # PHP's memory_limit, for the CLI and Apache alike. 128M is PHP's own default —
