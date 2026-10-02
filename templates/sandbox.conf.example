@@ -39,6 +39,15 @@ DOCROOT=public          # web root, relative to the project
 DB_NAME=db
 DB_PASSWORD=root
 
+# --- host Claude files --------------------------------------------------------
+# yes: mount host ~/.claude/CLAUDE.md and ~/.claude/agents into the sandbox,
+# read-only. Nothing else from ~/.claude, never credentials. `no` mounts nothing.
+# `install.sh --no-claude-md` does the same for one run. The sandbox can edit this
+# file and turn it back to yes (paths stay fixed), so only the flag is safe from it.
+# Must be exactly yes or no; an edit to the host CLAUDE.md made by atomic save
+# stays stale in a running container until it is recreated.
+HOST_CLAUDE_MD=yes
+
 # --- generated directories --------------------------------------------------
 # Paths kept OFF the bind mount, one per line, relative to the project root.
 #

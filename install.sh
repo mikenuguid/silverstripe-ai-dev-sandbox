@@ -3,7 +3,7 @@
 #
 # Installs a hardened devcontainer with a network airlock into a project.
 #
-#   ./install.sh --project /path/to/project [--preset php-mysql] [--interactive] [--force]
+#   ./install.sh --project /path/to/project [--preset php-mysql] [--interactive] [--force] [--no-claude-md]
 #
 # Safe to re-run: an existing sandbox.conf or allowlist.txt is never clobbered.
 set -euo pipefail
@@ -13,6 +13,7 @@ PROJECT=""
 PRESET="php-mysql"
 INTERACTIVE=0
 FORCE=0
+NO_CLAUDE_MD=0
 
 die()  { echo "error: $*" >&2; exit 1; }
 warn() { echo "warning: $*" >&2; }
@@ -33,6 +34,7 @@ while [ $# -gt 0 ]; do
                    PRESET="$2"; PRESET_FROM_FLAG=1; shift 2 ;;
     --interactive) INTERACTIVE=1;    shift ;;
     --force)       FORCE=1;          shift ;;
+    --no-claude-md) NO_CLAUDE_MD=1;  shift ;;
     -h|--help)     usage 0 ;;
     *) die "unknown option '$1'" ;;
   esac
@@ -97,7 +99,7 @@ read_conf() {
     val="${line#*=}"
     key="$(echo "$key" | tr -d '[:space:]')"
     case "$key" in
-      PRESET|PHP_VERSION|PHP_MEMORY_LIMIT|NODE_VERSION|MYSQL_VERSION|TZ|HTTP_PORT|DOCROOT|DB_NAME|DB_PASSWORD) ;;
+      PRESET|PHP_VERSION|PHP_MEMORY_LIMIT|NODE_VERSION|MYSQL_VERSION|TZ|HTTP_PORT|DOCROOT|DB_NAME|DB_PASSWORD|HOST_CLAUDE_MD) ;;
       SANDBOX_VOLUMES|EXTRA_ENV)
         # Multi-line quoted value: accumulate until the closing quote.
         if [ "${val:0:1}" = '"' ] && [ "${val: -1}" != '"' -o ${#val} -eq 1 ]; then
@@ -157,6 +159,7 @@ if [ "$INTERACTIVE" = "1" ]; then
     for k in PHP_VERSION PHP_MEMORY_LIMIT NODE_VERSION MYSQL_VERSION TZ HTTP_PORT DOCROOT DB_NAME DB_PASSWORD; do
       echo "$k=${CONF[$k]:-}"
     done
+    echo "HOST_CLAUDE_MD=${CONF[HOST_CLAUDE_MD]-}"
     printf 'SANDBOX_VOLUMES="%s"\n' "${CONF[SANDBOX_VOLUMES]:-}"
     # Preserve anything not prompted for, rather than dropping it.
     [ -n "${CONF[EXTRA_ENV]:-}" ] && printf 'EXTRA_ENV="%s"\n' "${CONF[EXTRA_ENV]}"
@@ -191,6 +194,11 @@ check DB_NAME       '!A-Za-z0-9_'
 check DB_PASSWORD   '!A-Za-z0-9._-'
 check DOCROOT       '!A-Za-z0-9._/-'
 check HTTP_PORT     '!0-9'
+
+case "${CONF[HOST_CLAUDE_MD]-}" in
+  yes|no) ;;
+  *) die "HOST_CLAUDE_MD must be 'yes' or 'no' (got '${CONF[HOST_CLAUDE_MD]-}')" ;;
+esac
 
 case "${CONF[DOCROOT]:-}" in
   /*|*..*) die "DOCROOT must be a relative path without '..'" ;;
@@ -228,6 +236,32 @@ MKDIR_LIST="${MKDIR_LIST# }"
 VOLUME_MOUNTS="${VOLUME_MOUNTS%$'\n'}"
 VOLUME_DECLS="${VOLUME_DECLS%$'\n'}"
 [ -n "$MKDIR_LIST" ] || die "SANDBOX_VOLUMES is empty — at least one generated directory is required"
+
+# Host CLAUDE.md and agents/ go in read-only. Paths are fixed here, never read
+# from sandbox.conf, which the sandbox can write (it can flip the switch, not the
+# paths). $HOME lands in the compose file, so it must be absolute and plain
+# (invariant 10).
+CLAUDE_MOUNTS=""
+_got=""
+_cm="${CONF[HOST_CLAUDE_MD]-}"
+[ "$NO_CLAUDE_MD" = "1" ] && _cm=no
+if [ "$_cm" = "yes" ]; then
+  case "$HOME" in
+    *[!A-Za-z0-9._/-]*|[!/]*|'') warn "HOME is not a plain absolute path — not mounting host CLAUDE.md or agents" ;;
+    *)
+      for _m in CLAUDE.md agents; do
+        [ -e "$HOME/.claude/$_m" ] || continue
+        CLAUDE_MOUNTS+="      - type: bind
+        source: $HOME/.claude/$_m
+        target: /home/dev/.claude/$_m
+        read_only: true
+        bind:
+          create_host_path: false"$'\n'
+        _got+=" $_m"
+      done ;;
+  esac
+fi
+CLAUDE_MOUNTS="${CLAUDE_MOUNTS%$'\n'}"
 
 # Warn early if the chosen host port is already taken. Otherwise the image
 # builds fine and the failure only appears at start, as an opaque
@@ -272,6 +306,7 @@ render() {
   content="${content//@@MKDIR_LIST@@/$MKDIR_LIST}"
   content="${content//@@VOLUME_MOUNTS@@/$VOLUME_MOUNTS}"
   content="${content//@@VOLUME_DECLS@@/$VOLUME_DECLS}"
+  content="${content//@@CLAUDE_MOUNTS@@/$CLAUDE_MOUNTS}"
   content="${content//@@EXTRA_ENV@@/$EXTRA_ENV}"
   printf '%s\n' "$content" > "$dest"
 }
@@ -281,6 +316,7 @@ render "$PRESET_DIR/Dockerfile.tmpl"          "$DEVDIR/Dockerfile"
 render "$PRESET_DIR/docker-compose.yml.tmpl"  "$DEVDIR/docker-compose.yml"
 render "$SELF_DIR/templates/devcontainer.json.tmpl" "$DEVDIR/devcontainer.json"
 info "Dockerfile, docker-compose.yml, devcontainer.json"
+info "host claude files mounted read-only:${_got:- none}"
 
 # Core files are copied verbatim — never templated. They carry the security
 # guarantee and must be identical in every install.

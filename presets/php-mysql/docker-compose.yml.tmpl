@@ -30,6 +30,11 @@ services:
       # Generated from SANDBOX_VOLUMES — same source as the Dockerfile mkdir list.
 @@VOLUME_MOUNTS@@
       - claude-config:/home/dev/.claude
+      # Host CLAUDE.md and agents/, read-only. The installer fixes these paths;
+      # sandbox.conf only toggles them, and the sandbox can write it, so only
+      # --no-claude-md is safe from it.
+      # Never mount all of ~/.claude: it holds credentials.
+@@CLAUDE_MOUNTS@@
       - command-history:/commandhistory
       # Package-manager caches. Without these every rebuild re-downloads
       # everything; a yarn cache alone is commonly several hundred MB.

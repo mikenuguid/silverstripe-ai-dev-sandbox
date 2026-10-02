@@ -118,7 +118,8 @@ There are two sets, and only one stays outside.
 
 **The agent's own credential is inside**, and must be. `/home/dev/.claude` is a named
 *volume*, not a bind to your host `~/.claude`, so the container gets its own login and your
-host credential is never exposed. You log in once, ever — it survives rebuilds.
+host credential is never exposed. Only `CLAUDE.md` and `agents/` are bound from the host,
+read-only (opt out with `--no-claude-md` or `HOST_CLAUDE_MD=no`); credentials never. You log in once, ever — it survives rebuilds.
 
 **Git and cloud credentials stay on the host.** They live in `~/.gitconfig`'s credential
 helper, `~/.config/gh/`, `~/.ssh/` — all outside the workspace, so none are mounted. SSH

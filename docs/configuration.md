@@ -47,7 +47,7 @@ and `ccnet status` must report `closed ... (enforced)`.
 
 Re-running the installer is safe. It preserves `sandbox.conf` and `allowlist.txt` untouched
 and refreshes only the generated files and the `core/` scripts. It also reads `PRESET` back
-out of your existing conf (`install.sh:45-52`), so `--preset` is not needed on a re-run —
+out of your existing conf (`install.sh:47-54`), so `--preset` is not needed on a re-run —
 and passing the wrong one would silently replace a working stack.
 
 When in doubt, run all three steps. The installer is idempotent, so the extra step costs
@@ -77,7 +77,7 @@ public/assets
 "
 ```
 
-Parsed key-by-key (`install.sh:89-121`), never sourced. Unrecognised keys are warned about
+Parsed key-by-key (`install.sh:91-123`), never sourced. Unrecognised keys are warned about
 and ignored. Any key you omit falls back to `presets/<name>/defaults.conf`.
 
 | Key | Default | Where it lands | Notes |
@@ -86,14 +86,22 @@ and ignored. Any key you omit falls back to `presets/<name>/defaults.conf`.
 | `PHP_VERSION` | `8.4` | `Dockerfile.tmpl:6` → `FROM php:<v>-apache` | Any tag of the `php:<v>-apache` image |
 | `PHP_MEMORY_LIMIT` | `128M` | `Dockerfile.tmpl:38` → `conf.d/zz-sandbox.ini` | PHP's `memory_limit`, CLI and Apache alike. A size with a suffix, or `-1` |
 | `NODE_VERSION` | `20` | `Dockerfile.tmpl:45` → NodeSource setup script | Node major version |
-| `MYSQL_VERSION` | `8.4` | `docker-compose.yml.tmpl:82` → `image: mysql:<v>` | Any tag of the `mysql` image |
+| `MYSQL_VERSION` | `8.4` | `docker-compose.yml.tmpl:87` → `image: mysql:<v>` | Any tag of the `mysql` image |
 | `TZ` | `UTC` | Dockerfile `ARG`/`ENV` + compose build arg | Container timezone |
-| `HTTP_PORT` | `8080` | `docker-compose.yml.tmpl:57` → `"<port>:80"` | Host port. Avoid 80/443 if another local stack uses them |
+| `HTTP_PORT` | `8080` | `docker-compose.yml.tmpl:62` → `"<port>:80"` | Host port. Avoid 80/443 if another local stack uses them |
 | `DOCROOT` | `public` | `Dockerfile.tmpl:40` → `APACHE_DOCUMENT_ROOT` | Apache web root, relative to the project |
 | `DB_NAME` | `db` | compose `db` env | Database created on first start |
 | `DB_PASSWORD` | `root` | compose `db` env + healthcheck | Dev only — never exposed on a host port |
-| `SANDBOX_VOLUMES` | `vendor`, `node_modules` | **both** `Dockerfile.tmpl:65` mkdir list and the compose volume mounts + declarations | Generated dirs kept off the bind mount |
-| `EXTRA_ENV` | — | `docker-compose.yml.tmpl:52`, verbatim YAML | Extra environment on the app service |
+| `SANDBOX_VOLUMES` | `vendor`, `node_modules` | **both** `Dockerfile.tmpl:67` mkdir list and the compose volume mounts + declarations | Generated dirs kept off the bind mount |
+| `HOST_CLAUDE_MD` | `yes` | `docker-compose.yml.tmpl` `@@CLAUDE_MOUNTS@@` | `yes` or `no`. Mounts host `~/.claude/CLAUDE.md` and `~/.claude/agents/` read-only; never credentials. Must be exactly `yes` or `no`. `install.sh --no-claude-md` forces `no` for one run and is the only form the sandbox cannot undo (it can edit `sandbox.conf`; the paths stay fixed, so the worst case is the default) |
+| `EXTRA_ENV` | — | `docker-compose.yml.tmpl:57`, verbatim YAML | Extra environment on the app service |
+
+Notes on `HOST_CLAUDE_MD`: the binds nest inside the `claude-config` volume and hide any
+same-named file the volume held before. A volume created before this feature can already hold
+root-owned `CLAUDE.md` / `agents` stubs (Docker makes them when a mountpoint is missing); clear them
+with `docker volume rm <project>_devcontainer_claude-config` after `ccnet down` (this also logs the
+agent out). A host `CLAUDE.md` saved by atomic rename (new inode) stays stale in a running container
+until it is recreated.
 
 Line references are to the templates in this repo; the generated files mirror them, though
 numbering shifts past a multi-line placeholder.
@@ -110,7 +118,7 @@ caches, uploaded assets. Three reasons they belong in volumes rather than on the
 3. It stops this stack and any other local stack (DDEV, Lando) corrupting each other's caches.
 
 This single list drives **both** the Dockerfile `mkdir` list and the compose volume list
-(`install.sh:206-230`), and that is deliberate. Never hand-edit one side of the generated
+(`install.sh:214-238`), and that is deliberate. Never hand-edit one side of the generated
 output. When the two disagree, Docker seeds the volume from a path that does not exist in the
 image, so it lands empty and owned by `root` — and the failure surfaces much later as an
 unwritable directory needing `docker volume rm`.
@@ -144,7 +152,7 @@ parse.
 
 ### Every scalar is validated
 
-Values are character-checked (`install.sh:179-200`) before interpolation. `PHP_VERSION`
+Values are character-checked (`install.sh:179-208`) before interpolation. `PHP_VERSION`
 allows only `[A-Za-z0-9._-]`; `PHP_MEMORY_LIMIT` only `[0-9KMGkmg-]`; `DOCROOT` must be
 relative and free of `..`; `HTTP_PORT` must be 1–65535. Anything else aborts the install.
 
@@ -169,7 +177,7 @@ registry.yarnpkg.com
 tcp:db:3306
 ```
 
-Copied to `/etc/sandbox-allowlist` in the image (`Dockerfile.tmpl:107`), root-owned, `0644`.
+Copied to `/etc/sandbox-allowlist` in the image (`Dockerfile.tmpl:150`), root-owned, `0644`.
 Parsed at firewall-apply time (`core/init-firewall.sh:54-70`). Two entry forms:
 
 | Entry | Meaning |

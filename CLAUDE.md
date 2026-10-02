@@ -111,7 +111,7 @@ Full walkthrough in `docs/presets.md`. In brief:
 
 1. `presets/<name>/` with `Dockerfile.tmpl`, `docker-compose.yml.tmpl`, `defaults.conf`.
 2. Support the same placeholders; at minimum `@@MKDIR_LIST@@`, `@@VOLUME_MOUNTS@@`,
-   `@@VOLUME_DECLS@@`, `@@USER_UID@@`, `@@USER_GID@@`, `@@EXTRA_ENV@@`.
+   `@@VOLUME_DECLS@@`, `@@USER_UID@@`, `@@USER_GID@@`, `@@CLAUDE_MOUNTS@@`, `@@EXTRA_ENV@@`.
 3. Copy the airlock block from `presets/php-mysql/Dockerfile.tmpl` **verbatim** — the
    `COPY`/`chown`/`chmod`/sudoers/allowlist/mode-file sequence.
 4. Keep the compose `command` pattern: firewall first, fail on non-zero, then the service.

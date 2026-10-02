@@ -62,9 +62,12 @@ RUN groupadd --gid $USER_GID $USERNAME \
 # then cannot write into it. This list is generated from SANDBOX_VOLUMES in
 # sandbox.conf, the same source as the compose volume list, so the two cannot
 # drift apart.
+# .claude/agents and CLAUDE.md are the mountpoints for the optional host binds:
+# if absent, Docker creates them root-owned inside the volume.
 RUN mkdir -p @@MKDIR_LIST@@ \
-             /home/$USERNAME/.claude /commandhistory \
+             /home/$USERNAME/.claude/agents /commandhistory \
              /home/$USERNAME/.cache/tmp /home/$USERNAME/.composer /home/$USERNAME/.npm \
+    && touch /home/$USERNAME/.claude/CLAUDE.md \
     && chown -R $USERNAME:$USERNAME /workspace /home/$USERNAME /commandhistory
 
 COPY zshrc /home/$USERNAME/.zshrc

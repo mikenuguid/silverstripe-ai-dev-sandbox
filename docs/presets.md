@@ -24,7 +24,7 @@ than load-bearing: `zshrc`, `airlock-warn.sh` and `net-guard.sh`.
 ## The placeholder contract
 
 Placeholders are `@@UPPER_SNAKE@@`, substituted by bash parameter expansion in
-`install.sh:257-277` — not `sed`, so values never need escaping and multi-line blocks
+`install.sh:291-312` — not `sed`, so values never need escaping and multi-line blocks
 substitute cleanly. A placeholder you do not use is simply left unsubstituted, so an
 unrecognised or misspelled one ships into the generated file as literal text.
 
@@ -34,6 +34,7 @@ unrecognised or misspelled one ships into the generated file as literal text.
 | `@@VOLUME_MOUNTS@@` | `SANDBOX_VOLUMES` | Multi-line, already indented 6 spaces. **Required** |
 | `@@VOLUME_DECLS@@` | `SANDBOX_VOLUMES` | Multi-line, indented 2 spaces, under `volumes:`. **Required** |
 | `@@USER_UID@@` / `@@USER_GID@@` | invoking user | **Required** — must match the host repo owner or the sandbox user cannot write to the bind mount |
+| `@@CLAUDE_MOUNTS@@` | `HOST_CLAUDE_MD` | Multi-line compose long-syntax read-only binds, indented 6 spaces; may be empty. Paths come from `$HOME`, never from `sandbox.conf`. **Required** |
 | `@@EXTRA_ENV@@` | `EXTRA_ENV` | Multi-line YAML, indented 6 spaces. **Required** |
 | `@@TZ@@`, `@@HTTP_PORT@@`, `@@DOCROOT@@` | `sandbox.conf` | |
 | `@@PHP_VERSION@@`, `@@PHP_MEMORY_LIMIT@@`, `@@NODE_VERSION@@`, `@@MYSQL_VERSION@@` | `sandbox.conf` | Stack-specific; ignore the ones your stack has no use for |
@@ -43,13 +44,13 @@ unrecognised or misspelled one ships into the generated file as literal text.
 Adding a **new** key means five edits, and missing any of the last three fails quietly rather
 than loudly:
 
-1. The recognised-key list in `read_conf` (`install.sh:100`) — otherwise the key is warned
+1. The recognised-key list in `read_conf` (`install.sh:102`) — otherwise the key is warned
    about and dropped.
-2. A `check` call validating its characters (`install.sh:183-193`). Not optional; see
+2. A `check` call validating its characters (`install.sh:186-196`). Not optional; see
    [Every scalar is validated](configuration.md#every-scalar-is-validated).
-3. A substitution line in `render` (`install.sh:257-277`) — otherwise the literal
+3. A substitution line in `render` (`install.sh:291-312`) — otherwise the literal
    `@@KEY@@` ships into the generated file.
-4. **Both** key lists in the `--interactive` block (`install.sh:150` and `install.sh:157`).
+4. **Both** key lists in the `--interactive` block (`install.sh:152` and `install.sh:159`).
    The second one rewrites `sandbox.conf` from a fixed list, so a key missing from it is
    silently deleted from the user's config on the next `--interactive` run.
 5. A default in every `presets/*/defaults.conf`, so projects that omit the key still render.
