@@ -143,6 +143,8 @@ downloads binaries from hosts you have not allowlisted — those would otherwise
 ```sh
 EXTRA_ENV="
 APP_ENV: dev
+TERM: 'xterm-256color'
+COLORTERM: 'truecolor'
 CYPRESS_INSTALL_BINARY: '0'
 PUPPETEER_SKIP_DOWNLOAD: '1'
 "
@@ -151,6 +153,12 @@ PUPPETEER_SKIP_DOWNLOAD: '1'
 Write `KEY: 'value'`, and do **not** backslash-escape the quotes. The file is parsed rather
 than sourced, so a `\"` survives literally into `docker-compose.yml` and breaks the YAML
 parse.
+
+Set terminal variables such as `TERM` and `COLORTERM` here, not in devcontainer.json
+`remoteEnv`. `remoteEnv` applies only to devcontainer tooling (VS Code, the devcontainer
+CLI), not `ccnet shell` (which uses `docker exec`), and `install.sh` regenerates
+devcontainer.json on every run. Match the values to your host terminal:
+`COLORTERM: 'truecolor'` garbles colours on a terminal without 24-bit colour.
 
 ### Every scalar is validated
 
