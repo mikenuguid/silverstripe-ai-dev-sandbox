@@ -219,6 +219,7 @@ credential lives: **[docs/how-it-works.md](docs/how-it-works.md)**.
 | App cannot reach its database | Missing `tcp:db:3306` in `allowlist.txt`, or it resolves to a public address and was refused. |
 | Asked to log in to the agent again | The `claude-config` volume was removed, or the project path changed. |
 | Network still reachable after `ccnet close` | A live connection surviving `ESTABLISHED,RELATED`. Confirm `conntrack` is installed in the image. |
+| Build fails: `additional privileges requested: pass "--allow=fs.read=…Dockerfile-with-features"` | Docker Compose 5.6+ / buildx 0.38+ build via bake, and the devcontainer CLI passes no `--allow`. `ccnet up` and `ccnet rebuild` set `BUILDX_BAKE_ENTITLEMENTS_FS=0`. For VS Code, JetBrains, Cursor or a plain `devcontainer up`, set it only for that process (for example `BUILDX_BAKE_ENTITLEMENTS_FS=0 code .`), not in `~/.profile` or a shell rc, where it turns off the check for every build in every repository. |
 | `docker compose down` did nothing | Wrong project name. Use `ccnet down`, which reads it off the running container. |
 
 ## Limitations

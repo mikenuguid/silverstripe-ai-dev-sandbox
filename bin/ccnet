@@ -100,10 +100,13 @@ case "$action" in
       echo "ccnet: devcontainer CLI not found. Install: npm i -g @devcontainers/cli" >&2
       exit 1
     }
+    # compose 5.6.0 / buildx 0.38.0 build via bake, which refuses the devcontainer CLI's Dockerfile-with-features
+    # in /tmp (outside the context) without fs.read, and the CLI passes no --allow.
+    # This turns off all bake fs checks, but adds no hole: the sandbox can already write .devcontainer/docker-compose.yml, and a tampered one can bind-mount any host path.
     if [ "$action" = "rebuild" ]; then
-      devcontainer up --remove-existing-container --workspace-folder "$folder"
+      BUILDX_BAKE_ENTITLEMENTS_FS=0 devcontainer up --remove-existing-container --workspace-folder "$folder"
     else
-      devcontainer up --workspace-folder "$folder"
+      BUILDX_BAKE_ENTITLEMENTS_FS=0 devcontainer up --workspace-folder "$folder"
     fi
     ;;
 
