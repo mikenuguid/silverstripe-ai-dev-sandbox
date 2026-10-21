@@ -154,10 +154,15 @@ Write `KEY: 'value'`, and do **not** backslash-escape the quotes. The file is pa
 than sourced, so a `\"` survives literally into `docker-compose.yml` and breaks the YAML
 parse.
 
-Set terminal variables such as `TERM` and `COLORTERM` here, not in devcontainer.json
-`remoteEnv`. `remoteEnv` applies only to devcontainer tooling (VS Code, the devcontainer
-CLI), not `ccnet shell` (which uses `docker exec`), and `install.sh` regenerates
-devcontainer.json on every run. Match the values to your host terminal:
+`ccnet shell` passes the host `COLORTERM` (when set) into the container, replacing the
+`EXTRA_ENV` value. It does not pass `TERM`: the image has no terminfo for terminal-specific
+values such as `xterm-kitty` or `xterm-ghostty`, so `TERM` stays the `EXTRA_ENV` value or
+docker's `xterm`. Editor terminals (VS Code and others) usually set both themselves, and
+`EXTRA_ENV` values are container-wide, reaching every process. Set them there only if your
+editor terminal or `devcontainer exec` does not already report colour, set `COLORTERM` only
+if every host terminal you connect from supports 24-bit colour, and keep `TERM` generic. Do not use
+devcontainer.json `remoteEnv`: it applies only to devcontainer tooling, and `install.sh`
+regenerates devcontainer.json on every run. Match the values to your host terminal:
 `COLORTERM: 'truecolor'` garbles colours on a terminal without 24-bit colour.
 
 ### Every scalar is validated

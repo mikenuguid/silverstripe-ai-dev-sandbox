@@ -112,7 +112,9 @@ case "$action" in
 
   shell)
     cid=$(require_container)
-    exec docker exec -it -u "$user" -w /workspace "$cid" zsh
+    # Claude Code needs COLORTERM for 24-bit colour, and docker exec does not pass it.
+    # Pass only COLORTERM: the image may have no terminfo for the host TERM (e.g. xterm-kitty).
+    exec docker exec -it ${COLORTERM:+-e COLORTERM} -u "$user" -w /workspace "$cid" zsh
     ;;
 
   status)
