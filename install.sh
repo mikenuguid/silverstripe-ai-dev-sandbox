@@ -237,9 +237,9 @@ VOLUME_MOUNTS="${VOLUME_MOUNTS%$'\n'}"
 VOLUME_DECLS="${VOLUME_DECLS%$'\n'}"
 [ -n "$MKDIR_LIST" ] || die "SANDBOX_VOLUMES is empty — at least one generated directory is required"
 
-# Host CLAUDE.md and agents/ go in read-only. Paths are fixed here, never read
-# from sandbox.conf, which the sandbox can write (it can flip the switch, not the
-# paths). $HOME lands in the compose file, so it must be absolute and plain
+# Host CLAUDE.md, agents/ and skills/ go in read-only. Paths are fixed here, never
+# read from sandbox.conf, which the sandbox can write (it can flip the switch, not
+# the paths). $HOME lands in the compose file, so it must be absolute and plain
 # (invariant 10).
 CLAUDE_MOUNTS=""
 _got=""
@@ -247,9 +247,9 @@ _cm="${CONF[HOST_CLAUDE_MD]-}"
 [ "$NO_CLAUDE_MD" = "1" ] && _cm=no
 if [ "$_cm" = "yes" ]; then
   case "$HOME" in
-    *[!A-Za-z0-9._/-]*|[!/]*|'') warn "HOME is not a plain absolute path — not mounting host CLAUDE.md or agents" ;;
+    *[!A-Za-z0-9._/-]*|[!/]*|'') warn "HOME is not a plain absolute path — not mounting host CLAUDE.md, agents or skills" ;;
     *)
-      for _m in CLAUDE.md agents; do
+      for _m in CLAUDE.md agents skills; do
         [ -e "$HOME/.claude/$_m" ] || continue
         CLAUDE_MOUNTS+="      - type: bind
         source: $HOME/.claude/$_m

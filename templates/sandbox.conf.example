@@ -41,8 +41,10 @@ DB_NAME=db
 DB_PASSWORD=root
 
 # --- host Claude files --------------------------------------------------------
-# yes: mount host ~/.claude/CLAUDE.md and ~/.claude/agents into the sandbox,
-# read-only. Nothing else from ~/.claude, never credentials. `no` mounts nothing.
+# yes: mount host ~/.claude/CLAUDE.md, ~/.claude/agents and ~/.claude/skills into the
+# sandbox, read-only. Nothing else from ~/.claude; the credential file is never mounted.
+# The agent can read all of skills/ (including synced/), so it must hold no secrets.
+# `no` mounts nothing.
 # `install.sh --no-claude-md` does the same for one run. The sandbox can edit this
 # file and turn it back to yes (paths stay fixed), so only the flag is safe from it.
 # Must be exactly yes or no; an edit to the host CLAUDE.md made by atomic save

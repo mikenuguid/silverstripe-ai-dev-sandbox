@@ -46,8 +46,9 @@ cd silverstripe-ai-dev-sandbox
 Add `--interactive` to be prompted for versions and ports on a first run, or `--force` to
 overwrite a `.devcontainer/` this installer did not create.
 
-By default your host `~/.claude/CLAUDE.md` and `~/.claude/agents/` are mounted into the sandbox
-read-only. Pass `--no-claude-md` to skip them for one run, or set `HOST_CLAUDE_MD=no` in
+By default your host `~/.claude/CLAUDE.md`, `~/.claude/agents/` and `~/.claude/skills/` are mounted
+into the sandbox read-only. The agent can read all of `skills/`, including `synced/`, so that tree
+must hold no secrets. Pass `--no-claude-md` to skip them for one run, or set `HOST_CLAUDE_MD=no` in
 `sandbox.conf` to skip them by default. The sandbox can write `sandbox.conf`, so it can turn
 them back on at your next install; only the flag is safe from that. The paths are fixed, so the
 worst case is the default. An editor that saves `CLAUDE.md` by rename leaves the running

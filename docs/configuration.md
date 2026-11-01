@@ -93,17 +93,20 @@ and ignored. Any key you omit falls back to `presets/<name>/defaults.conf`.
 | `DB_NAME` | `db` | compose `db` env | Database created on first start |
 | `DB_PASSWORD` | `root` | compose `db` env + healthcheck | Dev only — never exposed on a host port |
 | `SANDBOX_VOLUMES` | `vendor`, `node_modules` | **both** `Dockerfile.tmpl:67` mkdir list and the compose volume mounts + declarations | Generated dirs kept off the bind mount |
-| `HOST_CLAUDE_MD` | `yes` | `docker-compose.yml.tmpl` `@@CLAUDE_MOUNTS@@` | `yes` or `no`. Mounts host `~/.claude/CLAUDE.md` and `~/.claude/agents/` read-only; never credentials. Must be exactly `yes` or `no`. `install.sh --no-claude-md` forces `no` for one run and is the only form the sandbox cannot undo (it can edit `sandbox.conf`; the paths stay fixed, so the worst case is the default) |
+| `HOST_CLAUDE_MD` | `yes` | `docker-compose.yml.tmpl` `@@CLAUDE_MOUNTS@@` | `yes` or `no`. Mounts host `~/.claude/CLAUDE.md`, `~/.claude/agents/` and `~/.claude/skills/` read-only; the credential file is never mounted, but the agent can read all of `skills/`, including `synced/`, so that tree must hold no secrets. Must be exactly `yes` or `no`. `install.sh --no-claude-md` forces `no` for one run and is the only form the sandbox cannot undo (it can edit `sandbox.conf`; the paths stay fixed, so the worst case is the default) |
 | `EXTRA_ENV` | — | `docker-compose.yml.tmpl:57`, verbatim YAML | Extra environment on the app service |
 
 Upgrading from `NODE_VERSION=20`: `install.sh` preserves your `sandbox.conf`, so set `NODE_VERSION=22` in `.devcontainer/sandbox.conf`, re-run `install.sh`, then `ccnet rebuild`. Claude Code 2.1.198+ needs Node >=22.
 
 Notes on `HOST_CLAUDE_MD`: the binds nest inside the `claude-config` volume and hide any
-same-named file the volume held before. A volume created before this feature can already hold
-root-owned `CLAUDE.md` / `agents` stubs (Docker makes them when a mountpoint is missing); clear them
-with `docker volume rm <project>_devcontainer_claude-config` after `ccnet down` (this also logs the
-agent out). A host `CLAUDE.md` saved by atomic rename (new inode) stays stale in a running container
+same-named file the volume held before. A volume that predates a bind (every existing
+volume predates `skills`) keeps a root-owned stub for it, because Docker makes one when a mountpoint is
+missing. After a later `--no-claude-md` run the stub makes `~/.claude/skills` not writable. Clear the
+stubs with `docker volume rm <project>_devcontainer_claude-config` after `ccnet down` (this also logs
+the agent out). A host `CLAUDE.md` saved by atomic rename (new inode) stays stale in a running container
 until it is recreated.
+`skills/synced` is read-only in the sandbox, so claude.ai skills reach it only after a host session syncs them.
+Symlinks inside `skills/` resolve in the container, so an absolute link or a link out of the tree dangles and that skill is missing.
 
 Line references are to the templates in this repo; the generated files mirror them, though
 numbering shifts past a multi-line placeholder.
