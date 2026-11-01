@@ -138,6 +138,45 @@ Always works in both: all local file operations; all local git (`commit`, `branc
 `rebase`, `merge`, `stash`, `log`, `diff`, `reset`); builds, tests and linters from
 installed dependencies; dev servers on localhost.
 
+### Updating Claude Code
+
+Stop any Claude session in the container, then run this **on the host**, from the project
+folder:
+
+```bash
+ccnet open
+docker exec -u root -w /tmp -e TMPDIR=/tmp "$(docker ps -qf "label=devcontainer.local_folder=$PWD")" \
+  npm install -g @anthropic-ai/claude-code@latest
+ccnet close
+ccnet status   # must read: closed ... (enforced)
+```
+
+Each part is there for a reason:
+
+| Part | Why |
+|---|---|
+| Run from the host | The container cannot open its own airlock, and `dev` cannot run `net-open.sh`. |
+| `ccnet open` / `ccnet close` | While closed, the firewall blocks `registry.npmjs.org`. Keep the window short, because anything running in the container can reach the allowlist while it is open. |
+| Stop Claude first | A running agent would get that same access during the update. |
+| `-u root` | The global npm folder is root-owned. That is the point: `dev` cannot replace the `claude` binary, and that binary is what runs the managed hooks. |
+| `-w /tmp` | Keeps a root npm process out of `/workspace`, which the sandbox can write to. |
+| `-e TMPDIR=/tmp` | Compose sets `TMPDIR` inside `dev`'s cache volume. Root would leave root-owned files there. |
+
+Do not update from inside the container. The built-in updater needs the airlock open, and a
+native install (`claude install`) puts a binary in `/home/dev/.local/bin`. `dev` owns that
+binary, so the agent could replace it and bypass the hooks. That folder also comes first in
+`dev`'s `PATH`, so a native copy hides the npm update. If `whence -a claude` in `ccnet shell`
+lists it first, delete the symlink with `rm /home/dev/.local/bin/claude`.
+
+This update lasts until the container is recreated, because the image keeps the old version.
+`ccnet rebuild` does not change that: the `npm install` layer is cached, since its Dockerfile
+line has not changed. To update the image, rebuild without the cache. This rebuilds every
+layer and pulls the base image again, so other tools can change version too:
+
+```bash
+BUILDX_BAKE_ENTITLEMENTS_FS=0 devcontainer up --build-no-cache --remove-existing-container --workspace-folder "$PWD"
+```
+
 ## Configuration
 
 Two files in `.devcontainer/`, and the split is about **cost of change**.
